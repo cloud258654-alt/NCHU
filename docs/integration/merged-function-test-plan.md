@@ -186,7 +186,7 @@ Required checks:
    - 404 detail state
 7. Smoke test Dashboard frontend against Core API only.
 
-Current static and independent test commands:
+Current static, independent, and browser acceptance commands:
 
 ```powershell
 .\.venv\Scripts\python.exe -m compileall `
@@ -196,6 +196,8 @@ Current static and independent test commands:
 node --check apps\dashboard-ml\frontend\app.js
 
 .\.venv\Scripts\python.exe -m pytest apps\dashboard-ml\tests -q
+
+.\.venv\Scripts\python.exe -m pytest apps\dashboard-ml\tests\test_dashboard_browser_acceptance.py -q
 
 .\.venv\Scripts\python.exe apps\dashboard-ml\tools\validate_dashboard_app.py
 
@@ -209,7 +211,8 @@ Observed:
 ```text
 compileall: passed
 node --check: passed
-Dashboard independent pytest: 6 passed, 1 warning
+Dashboard independent pytest: 11 passed, 1 warning
+Dashboard Playwright Chromium acceptance: 5 passed
 Dashboard app validation passed
 apps/dashboard-ml forbidden-token scan: no matches
 ```

@@ -205,8 +205,9 @@ Validation summary:
 ```text
 Dashboard compile: PASS
 Dashboard JavaScript syntax: PASS
-Dashboard independent tests: 6 passed, 1 warning
+Dashboard independent tests: 11 passed, 1 warning
 Core regression: 298 passed, 1 warning
 Dashboard smoke: /api/health 200, /api/config 200, /dashboard 200
 Security scan under apps/dashboard-ml: no forbidden Supabase or secret token matches
+Gate 3 Playwright Chromium browser acceptance: 5 passed
 ```

@@ -55,7 +55,7 @@ node --check apps/dashboard-ml/frontend/app.js: PASS
 Dashboard independent tests:
 
 ```text
-6 passed, 1 warning
+11 passed, 1 warning
 ```
 
 Core regression:
@@ -78,10 +78,17 @@ Security scan:
 apps/dashboard-ml forbidden Supabase and secret token scan: no matches
 ```
 
+Gate 3 browser acceptance:
+
+```text
+Playwright Chromium acceptance: 5 passed
+```
+
 ## Known Limits
 
 - This rebuilt UI is not claimed to match the original Dashboard exactly.
-- Browser-level visual E2E testing was not added in this phase.
+- Browser-level functional acceptance against a local fake Core API passed in Gate 3.
+- Visual parity with the original Dashboard was not tested and is not claimed.
 - Live staging Core API and live staging data were not contacted.
 - Supabase initialization, link, migration dry-run, and db push remain separate phases.
 - ML inference and model artifact validation remain separate phases.
