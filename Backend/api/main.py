@@ -44,6 +44,12 @@ from api.business import (
     BusinessRegisterRequest,
 )
 from api.client_messages_log import MessageLogRequest, ClientMessagesLogRepository
+from api.dashboard import (
+    get_dashboard_review,
+    get_dashboard_summary,
+    list_dashboard_businesses,
+    list_dashboard_reviews,
+)
 
 if load_dotenv is not None:
     load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
@@ -55,6 +61,30 @@ app = FastAPI(
     title="BI-RMP Integration API",
     version="0.3.1",
     description="Backend endpoints used by n8n and LINE Messaging API workflows.",
+)
+app.add_api_route(
+    "/api/dashboard/businesses",
+    list_dashboard_businesses,
+    methods=["GET"],
+    tags=["dashboard"],
+)
+app.add_api_route(
+    "/api/dashboard/summary",
+    get_dashboard_summary,
+    methods=["GET"],
+    tags=["dashboard"],
+)
+app.add_api_route(
+    "/api/dashboard/reviews",
+    list_dashboard_reviews,
+    methods=["GET"],
+    tags=["dashboard"],
+)
+app.add_api_route(
+    "/api/dashboard/reviews/{review_id}",
+    get_dashboard_review,
+    methods=["GET"],
+    tags=["dashboard"],
 )
 
 
