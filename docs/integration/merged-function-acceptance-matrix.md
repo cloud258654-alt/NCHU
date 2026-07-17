@@ -1,7 +1,7 @@
 # Merged Function Acceptance Matrix
 
 Branch: `integration/bi-rmp-v2-staging-v2`
-Observed HEAD: `313b289`
+Observed baseline before Dashboard rebuild: `f6fb7c6`
 Baseline test result used for acceptance: `298 passed, 1 warning`.
 
 Status values:
@@ -41,33 +41,32 @@ Status values:
 
 | # | Function | Status | Acceptance evidence | Risk or gap |
 | --- | --- | --- | --- | --- |
-| 1 | Businesses API | IMPLEMENTED_AND_TESTED | `GET /api/dashboard/businesses`; `test_dashboard.py`. | Backend only; no Dashboard frontend consumer. |
-| 2 | Summary API | IMPLEMENTED_AND_TESTED | `GET /api/dashboard/summary`; optional `business_id` test. | No live DB validation. |
-| 3 | Reviews API | IMPLEMENTED_AND_TESTED | `GET /api/dashboard/reviews`; repository and route tests. | No frontend list/table. |
-| 4 | Single review API | IMPLEMENTED_AND_TESTED | `GET /api/dashboard/reviews/{review_id}`; 200/404/invalid ID tests. | No frontend detail page. |
-| 5 | Pagination | IMPLEMENTED_AND_TESTED | `page`, `page_size`, invalid page, and cap tests. | Frontend pagination controls absent. |
-| 6 | Business filter | IMPLEMENTED_AND_TESTED | `business_id` query tests for summary/reviews. | Ownership authorization is not implemented in Dashboard API. |
-| 7 | Platform filter | IMPLEMENTED_AND_TESTED | `platform` query and parameterized repository tests. | Frontend selector absent. |
-| 8 | Empty state | PARTIAL | Backend can return empty `items`. | No explicit backend empty-state test and no frontend empty-state UI. |
-| 9 | Error state | PARTIAL | Backend sanitized 503 tests exist. | Frontend error state absent. |
-| 10 | Dashboard frontend | MISSING | `apps/dashboard-ml` is absent. | Cannot validate UI behavior. |
-| 11 | Frontend Core API integration | MISSING | Contract doc exists. | Cannot validate implementation because Dashboard frontend is absent. |
-| 12 | Direct Supabase access removal | PARTIAL | Contract forbids direct Supabase; existing `Frontend` has no dashboard Supabase access. | Cannot scan absent `apps/dashboard-ml/frontend`. |
+| 1 | Businesses API | IMPLEMENTED_AND_TESTED | `GET /api/dashboard/businesses`; `test_dashboard.py`; Dashboard UI business selector. | No live DB validation. |
+| 2 | Summary API | IMPLEMENTED_AND_TESTED | `GET /api/dashboard/summary`; optional `business_id` test; Dashboard UI summary cards. | No live DB validation. |
+| 3 | Reviews API | IMPLEMENTED_AND_TESTED | `GET /api/dashboard/reviews`; repository and route tests; Dashboard UI table. | Browser E2E against a running Core API is still deferred. |
+| 4 | Single review API | IMPLEMENTED_AND_TESTED | `GET /api/dashboard/reviews/{review_id}`; 200/404/invalid ID tests; Dashboard detail dialog. | Browser E2E for 404 detail state is still deferred. |
+| 5 | Pagination | IMPLEMENTED_AND_TESTED | `page`, `page_size`, invalid page, cap tests, and Dashboard previous/next controls. | Browser E2E is still deferred. |
+| 6 | Business filter | IMPLEMENTED_AND_TESTED | `business_id` query tests for summary/reviews and Dashboard business selector. | Ownership authorization is not implemented in Dashboard API. |
+| 7 | Platform filter | IMPLEMENTED_AND_TESTED | `platform` query, parameterized repository tests, and Dashboard platform selector. | Browser E2E is still deferred. |
+| 8 | Empty state | IMPLEMENTED_AND_TESTED | Dashboard UI renders an empty review state when no items are returned. | No live staging data scenario was executed. |
+| 9 | Error state | IMPLEMENTED_AND_TESTED | Backend sanitized 503 tests and Dashboard UI error banner exist. | No live outage scenario was executed. |
+| 10 | Dashboard frontend | IMPLEMENTED_AND_TESTED | `apps/dashboard-ml/frontend` rebuilt; JS syntax and app validation pass. | Visual/browser E2E remains deferred. |
+| 11 | Frontend Core API integration | IMPLEMENTED_AND_TESTED | Runtime config is served by `apps/dashboard-ml/backend/app.py` from `BI_RMP_CORE_API_URL`; frontend uses Core API endpoints only. | Requires staging Core API URL at runtime. |
+| 12 | Direct Supabase access removal | IMPLEMENTED_AND_TESTED | Forbidden-token scan against `apps/dashboard-ml/frontend` returned no matches. | Future frontend changes must keep the scan passing. |
 
 ## Current Acceptance Conclusion
 
 ```text
 Core backend: accepted at automated-test level
 Dashboard backend API: accepted at automated-test level
-Dashboard frontend: not accepted, missing
+Dashboard frontend: accepted at static and syntax-check level
 Staging database behavior: not accepted live, intentionally not connected
 Deployment readiness: not accepted, deployment not in scope
 ```
 
 ## Blocking Gaps Before Full Staging Acceptance
 
-1. Restore `apps/dashboard-ml` from an approved source.
-2. Verify Dashboard frontend loads only the Core API base URL and does not call direct Supabase endpoints.
-3. Add direct automated test for `GET /health`.
-4. Run Dashboard frontend UI tests for loading, empty, error, pagination, business filter, platform filter, and review detail.
-5. Keep Supabase initialization/link/migration/db push in a separate explicit phase.
+1. Add direct automated test for `GET /health`.
+2. Run Dashboard frontend browser E2E tests for loading, empty, error, pagination, business filter, platform filter, review detail, and 404 detail state.
+3. Smoke test the rebuilt Dashboard against a running staging Core API.
+4. Keep Supabase initialization/link/migration/db push in a separate explicit phase.

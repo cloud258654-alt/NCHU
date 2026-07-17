@@ -1,8 +1,8 @@
 # Merged Function Test Plan
 
 Branch: `integration/bi-rmp-v2-staging-v2`
-Observed HEAD: `313b289`
-Purpose: define safe validation steps for the merged Core and Dashboard backend state.
+Observed baseline before Dashboard rebuild: `f6fb7c6`
+Purpose: define safe validation steps for the merged Core and rebuilt Dashboard application state.
 
 ## Safety Boundaries
 
@@ -39,7 +39,7 @@ Expected:
 ```text
 branch: integration/bi-rmp-v2-staging-v2
 working tree: clean before documentation edits, or only intentional documentation files after edits
-HEAD includes: 313b289 fix: enforce environment-specific database safety guards
+HEAD includes: f6fb7c6 docs: add merged function inventory and acceptance plan
 ```
 
 ## Static Inventory Checks
@@ -59,7 +59,7 @@ Backend/api/dashboard.py: True
 Backend/tests/api/test_dashboard.py: True
 docs/integration/dashboard-read-api.md: True
 Frontend: True
-apps/dashboard-ml: False
+apps/dashboard-ml: True
 ```
 
 ## Test Collection
@@ -95,7 +95,7 @@ Expected minimum:
 Current observed result:
 
 ```text
-298 passed, 1 warning in 2.83s
+298 passed, 1 warning in 3.02s
 ```
 
 ## Focused Test Groups
@@ -155,26 +155,26 @@ all selected tests pass
 These scans do not read `.env` files.
 
 ```powershell
-rg -n "supabase.co/rest/v1|/api/supabase-query|SUPABASE_SERVICE_ROLE_KEY|DATABASE_URL" Frontend Backend docs -g "!**/.env*"
+rg -n "supabase.co/rest/v1|/api/supabase-query|SUPABASE_SERVICE_ROLE_KEY|DATABASE_URL" Frontend Backend docs apps/dashboard-ml -g "!**/.env*"
 ```
 
 Interpretation:
 
 - Matches in backend server code and docs are expected.
-- Dashboard frontend direct Supabase access cannot be fully validated until `apps/dashboard-ml` exists.
-- Any match under a future `apps/dashboard-ml/frontend` path must be reviewed and removed unless it is documentation-only.
+- Matches in `apps/dashboard-ml/tools/validate_dashboard_app.py` are expected because that tool defines the forbidden-token list.
+- Matches under `apps/dashboard-ml/frontend` must fail the review unless they are proven false positives.
 
 ## Dashboard Frontend Acceptance Plan
 
-This section is blocked until `apps/dashboard-ml` is restored.
+The rebuilt Dashboard application lives under `apps/dashboard-ml`.
 
-Required checks after restore:
+Required checks:
 
 1. Confirm `apps/dashboard-ml` exists.
 2. Confirm frontend has configurable Core API base URL.
 3. Confirm frontend does not use direct Supabase REST URLs.
 4. Confirm frontend does not reference `DATABASE_URL` or service role keys.
-5. Run JS/Python syntax checks appropriate to the restored app.
+5. Run JS/Python syntax checks appropriate to the rebuilt app.
 6. Run UI tests for:
    - loading state
    - empty state
@@ -186,6 +186,46 @@ Required checks after restore:
    - 404 detail state
 7. Smoke test Dashboard frontend against Core API only.
 
+Current static commands:
+
+```powershell
+.\.venv\Scripts\python.exe -m compileall -q `
+  apps\dashboard-ml\backend `
+  apps\dashboard-ml\ml `
+  apps\dashboard-ml\tools
+
+node --check apps\dashboard-ml\frontend\app.js
+
+.\.venv\Scripts\python.exe apps\dashboard-ml\tools\validate_dashboard_app.py
+
+rg -n "supabase.co/rest/v1|/api/supabase-query|SUPABASE_SERVICE_ROLE_KEY|DATABASE_URL|postgres://|postgresql://" apps/dashboard-ml/frontend
+```
+
+Observed:
+
+```text
+compileall: passed
+node --check: passed
+Dashboard app validation passed
+frontend forbidden-token scan: no matches
+```
+
+Current local HTTP smoke commands:
+
+```powershell
+(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/api/health).Content
+(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/config.js).Content
+(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/).StatusCode
+```
+
+Observed:
+
+```text
+/api/health: {"status":"ok","service":"dashboard-ml","core_api_configured":true}
+/config.js: BI_RMP_CORE_API_URL runtime config served with http://127.0.0.1:8000
+/: 200
+```
+
 ## Deferred External Acceptance
 
 These checks require separate explicit approval:
@@ -194,7 +234,7 @@ These checks require separate explicit approval:
 | --- | --- |
 | Supabase | init/link/project-ref verification, migration dry-run, db push, live read/write checks |
 | Crawlers | live PTT, Google Maps, Threads runs |
-| ML | model load/inference and Dashboard ML API behavior |
+| ML | model load/inference beyond deterministic safe text features |
 | n8n | workflow startup and authenticated internal API calls |
 | LINE | LIFF live login and Messaging API push/reply |
 | Deployment | staging and production deploy validation |
@@ -206,9 +246,9 @@ git diff --check
 git status --short --branch
 ```
 
-Expected after creating the three documentation files:
+Expected after Dashboard rebuild:
 
 ```text
 git diff --check: exit code 0
-git status: only docs/integration/merged-function-*.md files are untracked or modified
+git status: apps/dashboard-ml files and intentional docs/integration updates only
 ```

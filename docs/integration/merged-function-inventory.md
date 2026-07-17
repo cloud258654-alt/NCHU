@@ -1,8 +1,8 @@
 # Merged Function Inventory
 
 Branch: `integration/bi-rmp-v2-staging-v2`
-Observed HEAD: `313b289`
-Inventory method: static source, test, and document review only.
+Observed baseline before Dashboard rebuild: `f6fb7c6`
+Inventory method: static source, test, document review, and rebuilt Dashboard application checks.
 
 Not performed in this inventory: Supabase init/link/query, migration, db push, live crawler run, ML model load/inference, n8n startup, LINE live test, deployment, main merge, or main push.
 
@@ -14,7 +14,7 @@ Not performed in this inventory: Supabase init/link/query, migration, db push, l
 | Runner CLI | Present at `Backend/runner.py` |
 | Platform adapters | Present under `Backend/adapters` for PTT, Google Maps, Threads, and web crawl4ai |
 | Dashboard backend read API | Present at `Backend/api/dashboard.py` |
-| Dashboard frontend app | Missing: `apps/dashboard-ml` is absent |
+| Dashboard frontend app | Present under `apps/dashboard-ml` as a rebuilt read-only Dashboard application |
 | Existing frontend | Present: `Frontend/register/index.html`, LIFF registration page only |
 | Dashboard API contract doc | Present: `docs/integration/dashboard-read-api.md` |
 | Supabase local project folder | Not used in this inventory |
@@ -46,7 +46,7 @@ Not performed in this inventory: Supabase init/link/query, migration, db push, l
 
 ## Dashboard Function Inventory
 
-Dashboard backend API exists. Dashboard frontend application is missing because `apps/dashboard-ml` is absent.
+Dashboard backend API exists. Dashboard frontend application has been rebuilt under `apps/dashboard-ml`.
 
 | # | Function | Implementation files | API route or UI | Related tests | Static test count |
 | --- | --- | --- | --- | --- | ---: |
@@ -57,17 +57,17 @@ Dashboard backend API exists. Dashboard frontend application is missing because 
 | 5 | Pagination | `Backend/api/dashboard.py` | `page`, `page_size` query params | `Backend/tests/api/test_dashboard.py` | 3 |
 | 6 | Business filter | `Backend/api/dashboard.py` | `business_id` query param | `Backend/tests/api/test_dashboard.py` | 2 |
 | 7 | Platform filter | `Backend/api/dashboard.py` | `platform` query param | `Backend/tests/api/test_dashboard.py` | 2 |
-| 8 | Empty state | Backend can return empty items | Dashboard UI absent | No explicit Dashboard UI test | 0 |
-| 9 | Error state | `Backend/api/dashboard.py` sanitized 503 errors | Backend error responses | `Backend/tests/api/test_dashboard.py` | 2 |
-| 10 | Dashboard frontend | Expected `apps/dashboard-ml` | Dashboard UI | Not runnable because path absent | 0 |
-| 11 | Frontend Core API integration | Expected `apps/dashboard-ml/frontend` | Dashboard UI HTTP client | Contract only: `docs/integration/dashboard-read-api.md` | 0 |
-| 12 | Direct Supabase access removal | Current `Frontend/register/index.html` plus contract doc | Dashboard app absent | Static scan only | 0 |
+| 8 | Empty state | `apps/dashboard-ml/frontend/app.js`, `index.html` | Dashboard UI empty review state | Static validation and JS syntax check | 1 |
+| 9 | Error state | `Backend/api/dashboard.py`, `apps/dashboard-ml/frontend/app.js` | Sanitized 503 backend responses and Dashboard UI error banner | `Backend/tests/api/test_dashboard.py`, frontend static validation | 3 |
+| 10 | Dashboard frontend | `apps/dashboard-ml/frontend/index.html`, `app.js`, `styles.css` | Read-only Dashboard UI | `node --check`, app validation tool | 2 |
+| 11 | Frontend Core API integration | `apps/dashboard-ml/backend/app.py`, `apps/dashboard-ml/frontend/app.js` | Runtime config from `BI_RMP_CORE_API_URL`; Core API HTTP client | App validation tool and static scan | 2 |
+| 12 | Direct Supabase access removal | `apps/dashboard-ml/frontend`, `apps/dashboard-ml/tools/validate_dashboard_app.py` | Frontend calls Core API only | Forbidden-token scan against Dashboard frontend | 1 |
 
 ## Dashboard Separation
 
 ```text
 Dashboard backend API: present
-Dashboard frontend application: missing because apps/dashboard-ml is absent
-Frontend Core API integration: not verifiable because Dashboard frontend is absent
-Direct Supabase access removal: only partially verifiable against existing Frontend and documentation
+Dashboard frontend application: present under apps/dashboard-ml
+Frontend Core API integration: implemented through BI_RMP_CORE_API_URL runtime config
+Direct Supabase access removal: statically verified for apps/dashboard-ml/frontend
 ```

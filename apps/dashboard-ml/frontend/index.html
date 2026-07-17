@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BI-RMP Dashboard</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+    <script src="/config.js"></script>
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">BI-RMP</p>
+        <h1>Reputation Dashboard</h1>
+      </div>
+      <div class="status-pill" id="connectionStatus">Connecting</div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar" aria-label="Filters">
+        <section class="panel">
+          <h2>Filters</h2>
+          <label for="businessFilter">Business</label>
+          <select id="businessFilter">
+            <option value="">All businesses</option>
+          </select>
+
+          <label for="platformFilter">Platform</label>
+          <select id="platformFilter">
+            <option value="">All platforms</option>
+            <option value="google_maps">Google Maps</option>
+            <option value="ptt">PTT</option>
+            <option value="threads">Threads</option>
+          </select>
+
+          <div class="button-row">
+            <button class="primary" id="refreshButton" type="button" title="Refresh dashboard">
+              <span aria-hidden="true">↻</span>
+              <span>Refresh</span>
+            </button>
+            <button id="resetButton" type="button" title="Reset filters">
+              <span aria-hidden="true">×</span>
+              <span>Reset</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>API</h2>
+          <p class="muted" id="apiBaseUrl"></p>
+        </section>
+      </aside>
+
+      <section class="content">
+        <section class="metrics" aria-label="Summary metrics">
+          <article class="metric">
+            <span>Total items</span>
+            <strong id="metricTotalItems">0</strong>
+          </article>
+          <article class="metric">
+            <span>Reviews</span>
+            <strong id="metricReviews">0</strong>
+          </article>
+          <article class="metric">
+            <span>Analyzed</span>
+            <strong id="metricAnalyzed">0</strong>
+          </article>
+          <article class="metric risk">
+            <span>Risk</span>
+            <strong id="metricRisk">None</strong>
+          </article>
+        </section>
+
+        <section class="panel reviews-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Reviews</h2>
+              <p class="muted" id="resultMeta">No results loaded</p>
+            </div>
+            <div class="pager">
+              <button id="prevPage" type="button" title="Previous page" aria-label="Previous page">‹</button>
+              <span id="pageLabel">Page 1</span>
+              <button id="nextPage" type="button" title="Next page" aria-label="Next page">›</button>
+            </div>
+          </div>
+
+          <div class="state" id="loadingState">Loading dashboard data...</div>
+          <div class="state error" id="errorState" hidden></div>
+          <div class="state" id="emptyState" hidden>No reviews match the current filters.</div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Business</th>
+                  <th>Platform</th>
+                  <th>Review</th>
+                  <th>Sentiment</th>
+                  <th>Risk</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody id="reviewsTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="reviewDialog">
+      <div class="dialog-header">
+        <h2 id="dialogTitle">Review detail</h2>
+        <button id="closeDialog" type="button" title="Close detail" aria-label="Close detail">×</button>
+      </div>
+      <div id="dialogBody" class="dialog-body"></div>
+    </dialog>
+  </body>
+</html>
