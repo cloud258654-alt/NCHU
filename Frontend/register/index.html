@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>BI-RMP 店家註冊</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --color-background: #f4f6f8;
+      --color-surface: #ffffff;
+      --color-primary: #1a73e8;
+      --color-primary-strong: #1558b0;
+      --color-on-primary: #ffffff;
+      --color-foreground: #172033;
+      --color-secondary: #526074;
+      --color-muted: #eef2f6;
+      --color-border: #d8e0e8;
+      --color-success: #137a4a;
+      --color-success-surface: #e8f7ef;
+      --color-error: #b42318;
+      --color-error-surface: #fef0ee;
+      --color-focus: #1a73e8;
+      --shadow-card: 0 18px 45px rgba(23, 32, 51, 0.12);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: var(--color-background);
+      color: var(--color-foreground);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    .page-shell {
+      width: min(100%, 600px);
+      margin: 0 auto;
+      padding: max(24px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 44px;
+      height: 44px;
+      flex: 0 0 44px;
+      place-items: center;
+      border-radius: 14px;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      box-shadow: 0 8px 18px rgba(26, 115, 232, 0.24);
+    }
+
+    .brand-name,
+    .brand-description {
+      margin: 0;
+    }
+
+    .brand-name {
+      font-weight: 750;
+      letter-spacing: -0.01em;
+    }
+
+    .brand-description {
+      color: var(--color-secondary);
+      font-size: 0.875rem;
+    }
+
+    .card {
+      overflow: hidden;
+      border: 1px solid var(--color-border);
+      border-radius: 24px;
+      background: var(--color-surface);
+      box-shadow: var(--shadow-card);
+    }
+
+    .card-header {
+      padding: 28px 24px 20px;
+      background: linear-gradient(145deg, rgba(26, 115, 232, 0.10), rgba(26, 115, 232, 0));
+    }
+
+    h1,
+    .intro {
+      margin: 0;
+    }
+
+    h1 {
+      max-width: 16ch;
+      font-size: clamp(1.65rem, 7vw, 2.15rem);
+      line-height: 1.2;
+      letter-spacing: -0.035em;
+    }
+
+    .intro {
+      margin-top: 12px;
+      color: var(--color-secondary);
+    }
+
+    .status {
+      display: flex;
+      min-height: 52px;
+      align-items: center;
+      gap: 10px;
+      margin-top: 18px;
+      padding: 12px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: 14px;
+      background: var(--color-muted);
+      font-size: 0.925rem;
+    }
+
+    .status[data-state="success"] {
+      border-color: rgba(19, 122, 74, 0.35);
+      background: var(--color-success-surface);
+      color: var(--color-success);
+    }
+
+    .status[data-state="error"] {
+      border-color: rgba(180, 35, 24, 0.32);
+      background: var(--color-error-surface);
+      color: var(--color-error);
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      border: 2px solid rgba(26, 115, 232, 0.24);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 700ms linear infinite;
+    }
+
+    .status:not([data-state="loading"]) .spinner {
+      display: none;
+    }
+
+    form {
+      padding: 24px;
+    }
+
+    .field + .field {
+      margin-top: 18px;
+    }
+
+    label {
+      display: inline-block;
+      margin-bottom: 7px;
+      font-weight: 650;
+    }
+
+    .required {
+      color: var(--color-error);
+    }
+
+    .helper,
+    .field-error {
+      margin: 6px 0 0;
+      font-size: 0.82rem;
+    }
+
+    .helper {
+      color: var(--color-secondary);
+    }
+
+    .field-error {
+      display: none;
+      color: var(--color-error);
+    }
+
+    .field[data-invalid="true"] .field-error {
+      display: block;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      min-height: 48px;
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      background: var(--color-surface);
+      color: var(--color-foreground);
+      padding: 11px 13px;
+      outline: none;
+      transition: border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+
+    input:focus-visible,
+    textarea:focus-visible,
+    button:focus-visible {
+      outline: 3px solid rgba(26, 115, 232, 0.28);
+      outline-offset: 2px;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: var(--color-focus);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+    }
+
+    .field[data-invalid="true"] input {
+      border-color: var(--color-error);
+    }
+
+    .actions {
+      margin-top: 26px;
+    }
+
+    button {
+      width: 100%;
+      min-height: 50px;
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 18px;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+      font-weight: 750;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: background-color 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--color-primary-strong);
+      box-shadow: 0 8px 20px rgba(26, 115, 232, 0.22);
+    }
+
+    button:active:not(:disabled) {
+      opacity: 0.88;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.46;
+    }
+
+    .privacy-note {
+      margin: 18px 0 0;
+      color: var(--color-secondary);
+      font-size: 0.8rem;
+      text-align: center;
+    }
+
+    .success-panel {
+      display: none;
+      padding: 34px 24px 28px;
+      text-align: center;
+    }
+
+    .success-panel[data-visible="true"] {
+      display: block;
+    }
+
+    .success-icon {
+      display: grid;
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 18px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--color-success-surface);
+      color: var(--color-success);
+    }
+
+    .success-icon svg {
+      width: 34px;
+      height: 34px;
+    }
+
+    .success-panel h2,
+    .success-panel p {
+      margin: 0;
+    }
+
+    .success-panel h2 {
+      font-size: 1.5rem;
+    }
+
+    .success-panel p {
+      margin-top: 8px;
+      color: var(--color-secondary);
+    }
+
+    .success-panel button {
+      margin-top: 24px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (min-width: 640px) {
+      .page-shell {
+        padding-right: 24px;
+        padding-left: 24px;
+      }
+
+      .card-header,
+      form,
+      .success-panel {
+        padding-right: 32px;
+        padding-left: 32px;
+      }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --color-background: #0f1722;
+        --color-surface: #172131;
+        --color-primary: #78aef7;
+        --color-primary-strong: #9bc2f8;
+        --color-on-primary: #0b1b31;
+        --color-foreground: #f3f6fa;
+        --color-secondary: #b2bfce;
+        --color-muted: #202d3e;
+        --color-border: #34445a;
+        --color-success: #74d4a5;
+        --color-success-surface: #173b2c;
+        --color-error: #ff9b91;
+        --color-error-surface: #4a211f;
+        --color-focus: #8ab8f8;
+        --shadow-card: 0 18px 45px rgba(0, 0, 0, 0.32);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page-shell">
+    <div class="brand" aria-label="BI-RMP">
+      <div class="brand-mark" aria-hidden="true">BR</div>
+      <div>
+        <p class="brand-name">BI-RMP</p>
+        <p class="brand-description">店家輿情監測服務</p>
+      </div>
+    </div>
+
+    <section class="card" aria-labelledby="page-title">
+      <div id="registration-view">
+        <header class="card-header">
+          <h1 id="page-title">完成店家註冊</h1>
+          <p class="intro">填寫基本資料後，即可透過 LINE 使用店家輿情監測與分析服務。</p>
+          <div id="status" class="status" data-state="loading" role="status" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="status-text">正在確認 LINE 身分…</span>
+          </div>
+        </header>
+
+        <form id="registration-form" novalidate>
+          <div class="field" id="client-name-field">
+            <label for="client-name">您的姓名 <span class="required" aria-hidden="true">*</span></label>
+            <input id="client-name" name="client_name" type="text" maxlength="255" autocomplete="name" required aria-describedby="client-name-helper client-name-error">
+            <p id="client-name-helper" class="helper">請填寫店家聯絡人的姓名。</p>
+            <p id="client-name-error" class="field-error" role="alert">請填寫您的姓名。</p>
+          </div>
+
+          <div class="field" id="name-field">
+            <label for="name">店家名稱 <span class="required" aria-hidden="true">*</span></label>
+            <input id="name" name="name" type="text" maxlength="255" autocomplete="organization" required aria-describedby="name-helper name-error">
+            <p id="name-helper" class="helper">請填寫對外使用的完整店家名稱。</p>
+            <p id="name-error" class="field-error" role="alert">請填寫店家名稱。</p>
+          </div>
+
+          <div class="field">
+            <label for="branch-name">分店名稱</label>
+            <input id="branch-name" name="branch_name" type="text" maxlength="255" autocomplete="organization-title">
+          </div>
+
+          <div class="field">
+            <label for="industry">產業類別</label>
+            <input id="industry" name="industry" type="text" maxlength="255" placeholder="例如：餐飲、零售、美容">
+          </div>
+
+          <div class="field">
+            <label for="address">店家地址</label>
+            <textarea id="address" name="address" maxlength="1000" autocomplete="street-address"></textarea>
+          </div>
+
+          <div class="actions">
+            <button id="submit-button" type="submit" disabled>確認註冊</button>
+          </div>
+          <p class="privacy-note">身分僅透過 LINE 登入憑證驗證；頁面不會儲存您的登入憑證。</p>
+        </form>
+      </div>
+
+      <div id="success-panel" class="success-panel" data-visible="false" aria-live="polite">
+        <div class="success-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m5 12 4 4L19 6"></path>
+          </svg>
+        </div>
+        <h2>店家註冊完成</h2>
+        <p id="success-message">已完成店家綁定，現在可以回到 LINE 使用服務。</p>
+        <button id="close-button" type="button">返回 LINE</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    (() => {
+      const form = document.getElementById("registration-form");
+      const submitButton = document.getElementById("submit-button");
+      const status = document.getElementById("status");
+      const statusText = document.getElementById("status-text");
+      const clientNameInput = document.getElementById("client-name");
+      const clientNameField = document.getElementById("client-name-field");
+      const nameInput = document.getElementById("name");
+      const nameField = document.getElementById("name-field");
+      const registrationView = document.getElementById("registration-view");
+      const successPanel = document.getElementById("success-panel");
+      const successMessage = document.getElementById("success-message");
+      const closeButton = document.getElementById("close-button");
+      let idToken = "";
+
+      function setStatus(state, message) {
+        status.dataset.state = state;
+        statusText.textContent = message;
+      }
+
+      function setSubmitting(isSubmitting) {
+        submitButton.disabled = isSubmitting || !idToken;
+        submitButton.textContent = isSubmitting ? "正在註冊…" : "確認註冊";
+      }
+
+      function validateName() {
+        const isValid = Boolean(nameInput.value.trim());
+        nameField.dataset.invalid = String(!isValid);
+        nameInput.setAttribute("aria-invalid", String(!isValid));
+        return isValid;
+      }
+
+      function validateClientName() {
+        const isValid = Boolean(clientNameInput.value.trim());
+        clientNameField.dataset.invalid = String(!isValid);
+        clientNameInput.setAttribute("aria-invalid", String(!isValid));
+        return isValid;
+      }
+
+      function normalizeOptional(value) {
+        const normalized = value.trim();
+        return normalized || null;
+      }
+
+      async function initializeLiff() {
+        try {
+          const response = await fetch("/api/liff/config", {
+            headers: { "Accept": "application/json" },
+          });
+          if (!response.ok) {
+            throw new Error("LIFF 尚未完成設定，請聯絡系統管理員。");
+          }
+
+          const config = await response.json();
+          await liff.init({
+            liffId: config.liff_id,
+            withLoginOnExternalBrowser: true,
+          });
+
+          idToken = liff.getIDToken() || "";
+          if (!idToken) {
+            throw new Error("無法取得 LINE 登入憑證，請從 LINE 重新開啟註冊頁。");
+          }
+
+          setStatus("success", "LINE 身分確認完成，可以填寫店家資料。");
+          setSubmitting(false);
+        } catch (error) {
+          idToken = "";
+          setSubmitting(false);
+          setStatus("error", error.message || "LINE 身分確認失敗，請稍後再試。");
+        }
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!validateClientName()) {
+          clientNameInput.focus();
+          return;
+        }
+        if (!validateName()) {
+          nameInput.focus();
+          return;
+        }
+        if (!idToken) {
+          setStatus("error", "LINE 身分尚未確認，請重新開啟註冊頁。");
+          return;
+        }
+
+        setSubmitting(true);
+        setStatus("loading", "正在建立店家資料…");
+
+        const formData = new FormData(form);
+        const payload = {
+          id_token: idToken,
+          client_name: formData.get("client_name").trim(),
+          name: formData.get("name").trim(),
+          branch_name: normalizeOptional(formData.get("branch_name")),
+          industry: normalizeOptional(formData.get("industry")),
+          address: normalizeOptional(formData.get("address")),
+        };
+
+        try {
+          const response = await fetch("/api/liff/business/register", {
+            method: "POST",
+            headers: {
+              "Accept": "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(result.detail || "店家註冊失敗，請確認資料後重試。");
+          }
+
+          successMessage.textContent = `「${result.name}」已完成綁定。請回到 LINE 開始使用服務；若已加入官方帳號好友，會收到開始使用說明。`;
+          registrationView.hidden = true;
+          successPanel.dataset.visible = "true";
+          closeButton.focus();
+        } catch (error) {
+          setStatus("error", error.message || "店家註冊失敗，請稍後再試。");
+          setSubmitting(false);
+        }
+      });
+
+      clientNameInput.addEventListener("blur", validateClientName);
+      clientNameInput.addEventListener("input", () => {
+        if (clientNameField.dataset.invalid === "true") {
+          validateClientName();
+        }
+      });
+
+      nameInput.addEventListener("blur", validateName);
+      nameInput.addEventListener("input", () => {
+        if (nameField.dataset.invalid === "true") {
+          validateName();
+        }
+      });
+
+      closeButton.addEventListener("click", () => {
+        if (window.liff && window.liff.isInClient()) {
+          window.liff.closeWindow();
+          return;
+        }
+        window.close();
+      });
+
+      initializeLiff();
+    })();
+  </script>
+</body>
+</html>

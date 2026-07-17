@@ -1,0 +1,400 @@
+{
+  "name": "LINE Reviews - Zero Push Async Reputation Crawler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line/events",
+        "responseMode": "onReceived",
+        "responseCode": 200,
+        "options": { "rawBody": true, "noResponseBody": true }
+      },
+      "id": "line-webhook",
+      "name": "LINE Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-1320, 0],
+      "webhookId": "bi-rmp-line-events"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst input = $input.first().json;\nconst headers = input.headers ?? {};\nconst signature = headers['x-line-signature'] ?? headers['X-Line-Signature'];\nconst secret = $env.LINE_CHANNEL_SECRET;\nif (!secret || !signature) throw new Error('Missing LINE signature configuration');\nconst rawBody = typeof input.body === 'string' ? input.body : (typeof input.rawBody === 'string' ? input.rawBody : JSON.stringify(input.body ?? {}));\nconst expected = crypto.createHmac('sha256', secret).update(rawBody, 'utf8').digest('base64');\nconst actualBuffer = Buffer.from(signature);\nconst expectedBuffer = Buffer.from(expected);\nif (actualBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(actualBuffer, expectedBuffer)) throw new Error('Invalid LINE webhook signature');\nconst body = typeof input.body === 'string' ? JSON.parse(input.body) : (input.body ?? {});\nconst events = (Array.isArray(body.events) ? body.events : []).filter(event => event.replyToken && event.source?.userId);\nconst processed = [];\nfor (const event of events) {\n  const postbackData = event.type === 'postback' ? (event.postback?.data ?? '') : '';\n  const messageText = event.type === 'message' && event.message?.type === 'text' ? (event.message.text ?? '') : postbackData;\n  const trimmedText = messageText.trim();\n  const match = /^crawl_status:(\\d+)$/.exec(postbackData);\n  let intent = 'onboarding';\n  let taskId = null;\n  if (match || trimmedText === '查詢進度') {\n    intent = 'status_query';\n    taskId = match ? match[1] : null;\n  } else if (trimmedText === '風評查詢') {\n    intent = 'crawl_query';\n  } else if (event.type === 'follow') {\n    intent = 'onboarding';\n  }\n  processed.push({ json: {\n    lineUserId: event.source.userId, replyToken: event.replyToken, messageText,\n    webhookEventId: event.webhookEventId ?? null, isRedelivery: event.deliveryContext?.isRedelivery ?? false,\n    intent, taskId\n  }});\n}\nreturn processed;"
+      },
+      "id": "verify-route",
+      "name": "Verify LINE Signature and Parse Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1080, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BI_RMP_BACKEND_BASE_URL + '/api/line/client-recognition' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "X-BI-RMP-API-Key", "value": "={{ $env.BI_RMP_INTERNAL_API_KEY }}" }
+        ]},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ line_user_id: $json.lineUserId }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "recognize-client",
+      "name": "Identify Client and Business",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-840, 0],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "conditions": [{
+            "id": "business-found",
+            "leftValue": "={{ $json.business_found }}",
+            "rightValue": true,
+            "operator": { "type": "boolean", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "business-found-check",
+      "name": "Check if Business Registered",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-580, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "conditions": [{
+            "id": "is-status",
+            "leftValue": "={{ $json.intent }}",
+            "rightValue": "status_query",
+            "operator": { "type": "string", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "status-intent",
+      "name": "Check if Status Query",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-320, -100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "conditions": [{
+            "id": "is-crawl",
+            "leftValue": "={{ $json.intent }}",
+            "rightValue": "crawl_query",
+            "operator": { "type": "string", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "crawl-intent",
+      "name": "Check if Crawl Query",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-320, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.taskId ? $env.BI_RMP_BACKEND_BASE_URL + '/api/line/reputation-crawler/jobs/' + $json.taskId + '/status' : $env.BI_RMP_BACKEND_BASE_URL + '/api/line/reputation-crawler/jobs/status/latest' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "X-BI-RMP-API-Key", "value": "={{ $env.BI_RMP_INTERNAL_API_KEY }}" }
+        ]},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ line_user_id: $json.lineUserId }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "get-status",
+      "name": "Fetch Crawl Job Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-60, -220],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $('Verify LINE Signature and Parse Intent').item.json;\nconst status = $json ?? {};\nconst failedRequest = Boolean(status.error || status.message?.error || (Number(status.statusCode) >= 400));\nconst taskId = status.task_id ?? event.taskId ?? null;\nconst state = failedRequest ? 'not_found' : (status.status ?? 'pending');\nconst platforms = Array.isArray(status.platform_results) ? status.platform_results : [];\nconst labels = { ptt: 'PTT', google_maps: 'Google Maps', threads: 'Threads' };\nconst progress = platforms.length ? '\\n' + platforms.map(p => `${labels[p.platform] ?? p.platform}：${p.status}`).join('\\n') : '';\nconst quickReply = taskId ? { items: [{ type: 'action', action: { type: 'postback', label: '查詢進度', data: `crawl_status:${taskId}`, displayText: '查詢進度' } }] } : undefined;\nlet text;\nlet reportReady = false;\nif (state === 'completed' || state === 'partial_success') {\n  reportReady = true;\n  text = `任務 ${taskId} 已完成：找到 ${Number(status.articles_found ?? 0)} 篇內容、${Number(status.comments_found ?? 0)} 則留言。`;\n} else if (state === 'failed' || state === 'timeout' || state === 'cancelled') {\n  text = `任務 ${taskId ?? ''} 執行失敗，請稍後重新查詢。${status.error_message ? `\\n${String(status.error_message).slice(0, 300)}` : ''}`;\n} else if (state === 'not_found') {\n  text = '找不到可查詢的風評任務，請先重新提出店家風評查詢。';\n} else {\n  text = `任務 ${taskId} 目前為 ${state}，系統仍在背景處理。${progress}`;\n}\nconst message = { type: 'text', text };\nif (!reportReady && quickReply) message.quickReply = quickReply;\nreturn [{ json: {\n  replyToken: event.replyToken, lineUserId: event.lineUserId, taskId, state, reportReady,\n  messages: [message], noticeMessages: reportReady ? [message] : [],\n  reportPayload: { line_user_id: event.lineUserId, business_name: status.business_name ?? null, message_text: '查詢進度', refresh: false }\n}}];"
+      },
+      "id": "prepare-status",
+      "name": "Format Crawl Status Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, -220]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "conditions": [{
+            "id": "report-ready",
+            "leftValue": "={{ $json.reportReady }}",
+            "rightValue": true,
+            "operator": { "type": "boolean", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "report-ready",
+      "name": "Check if Crawl Report is Ready",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [460, -220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BI_RMP_BACKEND_BASE_URL + '/api/line/reputation-summary' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "X-BI-RMP-API-Key", "value": "={{ $env.BI_RMP_INTERNAL_API_KEY }}" }
+        ]},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.reportPayload) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "get-status-report",
+      "name": "Fetch Completed Crawl Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, -340],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const request = $('Format Crawl Status Response').item.json;\nconst backend = $json ?? {};\nconst valid = !backend.error && !(Number(backend.statusCode) >= 400) && Array.isArray(backend.line_messages) && backend.line_messages.length;\nconst messages = valid ? [...request.noticeMessages, ...backend.line_messages].slice(0, 5) : [{ type: 'text', text: '爬蟲已完成，但報告暫時無法產生，請稍後再查詢。' }];\nreturn [{ json: { replyToken: request.replyToken, messages } }];"
+      },
+      "id": "prepare-status-report",
+      "name": "Format Completed Report Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, -340]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $('Verify LINE Signature and Parse Intent').item.json;\nconst recognition = $('Identify Client and Business').item.json;\nreturn [{ json: {\n  replyToken: event.replyToken, lineUserId: event.lineUserId,\n  reputationCrawlerPayload: { line_user_id: event.lineUserId, business_name: recognition.business_name, webhook_event_id: event.webhookEventId }\n}}];"
+      },
+      "id": "registered-business",
+      "name": "Prepare Crawler Trigger Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-60, 40]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BI_RMP_BACKEND_BASE_URL + '/api/line/reputation-crawler/jobs' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "X-BI-RMP-API-Key", "value": "={{ $env.BI_RMP_INTERNAL_API_KEY }}" }
+        ]},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.reputationCrawlerPayload) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "create-job",
+      "name": "Create Background Crawl Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [200, 40],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const request = $('Prepare Crawler Trigger Payload').item.json;\nconst created = $json ?? {};\nconst taskId = created.task_id ?? null;\nconst canRun = Boolean(taskId) && !created.error && !(Number(created.statusCode) >= 400);\nconst message = canRun ? {\n  type: 'text', text: '已受理店家風評查詢，系統正在背景處理。完成後請點選「查詢進度」。',\n  quickReply: { items: [{ type: 'action', action: { type: 'postback', label: '查詢進度', data: `crawl_status:${taskId}`, displayText: '查詢進度' } }] }\n} : { type: 'text', text: '目前無法建立風評查詢任務，請稍後再試。' };\nreturn [{ json: { replyToken: request.replyToken, taskId, canRun, messages: [message] } }];"
+      },
+      "id": "prepare-accepted",
+      "name": "Format Crawl Accepted Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 40]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "Authorization", "value": "={{ 'Bearer ' + $env.LINE_CHANNEL_ACCESS_TOKEN }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ replyToken: $json.replyToken, messages: $json.messages }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "reply-accepted",
+      "name": "Send Crawl Accepted Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 40],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BI_RMP_BACKEND_BASE_URL + '/api/line/reputation-crawler/jobs/' + $('Format Crawl Accepted Response').item.json.taskId + '/run' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "X-BI-RMP-API-Key", "value": "={{ $env.BI_RMP_INTERNAL_API_KEY }}" }
+        ]},
+        "options": { "timeout": 1250000 }
+      },
+      "id": "run-job",
+      "name": "Trigger Background Crawler Run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, 40],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $('Verify LINE Signature and Parse Intent').item.json;\nconst recognition = $('Identify Client and Business').item.json;\nconst displayName = recognition.branch_name ? `${recognition.business_name}｜${recognition.branch_name}` : recognition.business_name;\nconst message = {\n  type: 'text',\n  text: `🎉 恭喜！您的店家「${displayName}」已完成註冊綁定。\\n\\n您可以隨時點選選單中的「風評查詢」進行聲譽監測。`\n};\nreturn [{ json: { replyToken: event.replyToken, messages: [message] } }];"
+      },
+      "id": "prepare-congratulations",
+      "name": "Format Onboarding Success Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-60, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $('Verify LINE Signature and Parse Intent').item.json;\nconst recognition = $('Identify Client and Business').item.json;\nconst messages = recognition.registration_flex_message || [{\n  type: 'text',\n  text: '您目前尚未綁定任何店家，請進行註冊。'\n}];\nreturn [{ json: { replyToken: event.replyToken, messages } }];"
+      },
+      "id": "prepare-register-invite-reply",
+      "name": "Format Registration Invitation Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-320, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "Authorization", "value": "={{ 'Bearer ' + $env.LINE_CHANNEL_ACCESS_TOKEN }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ replyToken: $json.replyToken, messages: $json.messages }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "reply-user",
+      "name": "Send General Message Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, 200]
+    },
+    {
+      "parameters": {
+        "content": "## ZERO PUSH DELIVERY\n\n1. Create a durable pending job.\n2. Reply immediately with an accepted message and a status Quick Reply.\n3. Run the crawler only after the Reply API node.\n4. Run PTT, Google Maps and Threads with bounded async concurrency; at most two isolated Chromium instances are active.\n5. Google Maps and Threads each receive a 180-second crawl budget plus persistence grace.\n6. A later status interaction uses its new reply token for progress or results.\n7. This workflow contains no LINE Push API node.",
+        "height": 280,
+        "width": 420,
+        "color": 4
+      },
+      "id": "scope-note",
+      "name": "Zero Push Delivery Scope",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-320, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BI_RMP_BACKEND_BASE_URL + '/api/line/messages/log' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "X-BI-RMP-API-Key", "value": "={{ $env.BI_RMP_INTERNAL_API_KEY }}" }
+        ]},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ \n  (() => {\n    const body = typeof $json.body === 'string' ? JSON.parse($json.body) : ($json.body || {});\n    const event = (body.events || [])[0] || {};\n    const postbackData = event.type === 'postback' ? (event.postback?.data || '') : '';\n    const messageText = event.type === 'message' && event.message?.type === 'text' ? (event.message.text || '') : postbackData;\n    return JSON.stringify({\n      line_user_id: event.source?.userId || '',\n      message_text: messageText || null,\n      direction: 'incoming'\n    });\n  })()\n}}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "log-chat-message",
+      "name": "Log Incoming Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1080, -150],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "LINE Webhook": { "main": [
+      [
+        { "node": "Log Incoming Message", "type": "main", "index": 0 },
+        { "node": "Verify LINE Signature and Parse Intent", "type": "main", "index": 0 }
+      ]
+    ] },
+    "Verify LINE Signature and Parse Intent": { "main": [[{ "node": "Identify Client and Business", "type": "main", "index": 0 }]] },
+    "Identify Client and Business": { "main": [[{ "node": "Check if Business Registered", "type": "main", "index": 0 }]] },
+    "Check if Business Registered": { "main": [
+      [{ "node": "Check if Status Query", "type": "main", "index": 0 }],
+      [{ "node": "Format Registration Invitation Response", "type": "main", "index": 0 }]
+    ] },
+    "Check if Status Query": { "main": [
+      [{ "node": "Fetch Crawl Job Status", "type": "main", "index": 0 }],
+      [{ "node": "Check if Crawl Query", "type": "main", "index": 0 }]
+    ] },
+    "Check if Crawl Query": { "main": [
+      [{ "node": "Prepare Crawler Trigger Payload", "type": "main", "index": 0 }],
+      [{ "node": "Format Onboarding Success Response", "type": "main", "index": 0 }]
+    ] },
+    "Fetch Crawl Job Status": { "main": [[{ "node": "Format Crawl Status Response", "type": "main", "index": 0 }]] },
+    "Format Crawl Status Response": { "main": [[{ "node": "Check if Crawl Report is Ready", "type": "main", "index": 0 }]] },
+    "Check if Crawl Report is Ready": { "main": [
+      [{ "node": "Fetch Completed Crawl Report", "type": "main", "index": 0 }],
+      [{ "node": "Send General Message Response", "type": "main", "index": 0 }]
+    ] },
+    "Fetch Completed Crawl Report": { "main": [[{ "node": "Format Completed Report Response", "type": "main", "index": 0 }]] },
+    "Format Completed Report Response": { "main": [[{ "node": "Send General Message Response", "type": "main", "index": 0 }]] },
+    "Prepare Crawler Trigger Payload": { "main": [[{ "node": "Create Background Crawl Job", "type": "main", "index": 0 }]] },
+    "Create Background Crawl Job": { "main": [[{ "node": "Format Crawl Accepted Response", "type": "main", "index": 0 }]] },
+    "Format Crawl Accepted Response": { "main": [[{ "node": "Send Crawl Accepted Response", "type": "main", "index": 0 }]] },
+    "Send Crawl Accepted Response": { "main": [[{ "node": "Trigger Background Crawler Run", "type": "main", "index": 0 }]] },
+    "Format Registration Invitation Response": { "main": [[{ "node": "Send General Message Response", "type": "main", "index": 0 }]] },
+    "Format Onboarding Success Response": { "main": [[{ "node": "Send General Message Response", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Taipei",
+    "saveManualExecutions": true
+  },
+  "active": false,
+  "versionId": "13d7f775-4901-4698-9c84-5a2ce2f6cbc8",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

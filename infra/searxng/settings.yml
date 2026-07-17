@@ -1,0 +1,12 @@
+# SearXNG local configuration for BI-RMP
+use_default_settings: true
+
+server:
+  # Secret key is required for cryptographic signing (sessions, tokens)
+  secret_key: "bi_rmp_local_searxng_secret_key_string"
+
+search:
+  # Enable json format so the crawler's python API client can query results
+  formats:
+    - html
+    - json

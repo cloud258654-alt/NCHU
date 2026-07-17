@@ -1,0 +1,61 @@
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+node_modules/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+logs/
+*.log
+*.pyc
+*.pyo
+dist/
+build/
+coverage/
+.DS_Store
+Thumbs.db
+# Environment variables and secrets
+**/.env
+!**/.env.example
+.vscode/
+
+# Virtual environment
+env/
+ENV/
+# Python cache and compiled files
+*.pyd
+.coverage
+htmlcov/
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+# Runtime crawl and browser-test artifacts
+debug/
+storage/
+storage_state*.json
+*_state.json
+Backend/adapters/**/debug_html/
+Backend/adapters/**/debug_json/
+Backend/adapters/**/screenshots/
+Backend/adapters/**/har/
+Backend/adapters/**/cache/
+playwright-report/
+test-results/
+tmp_*.jsonl
+*.har
+*.trace.zip
+# Local n8n runtime artifacts and credential-like exports
+infra/n8n/data/
+infra/n8n/backups/
+infra/n8n/workflows/*.credential*.json
+infra/n8n/workflows/*credentials*.json
+# Document temporary files
+~$*.docx
+*.tmp
+# Operating system files
+Backend/adapters/ptt/buffer/*
+infra/n8n/ngrok.exe

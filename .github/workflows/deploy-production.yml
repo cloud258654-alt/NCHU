@@ -1,0 +1,44 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+    inputs:
+      deploy_scope:
+        description: Deployment scope
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - backend-only
+          - full
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bi-rmp-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy BI-RMP to GCP
+
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+
+    steps:
+      - name: Checkout deployment commit
+        uses: actions/checkout@v4
+
+      - name: Deploy to GCP
+        env:
+          DEPLOY_SCOPE: ${{ github.event.inputs.deploy_scope || 'auto' }}
+        run: |
+          bash scripts/deploy-production.sh "${{ github.sha }}" "${DEPLOY_SCOPE}"
