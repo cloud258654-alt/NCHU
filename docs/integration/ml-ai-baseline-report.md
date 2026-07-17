@@ -32,12 +32,26 @@ POST /api/ai/suggest-response
 - Ollama and other LLM integrations are deferred.
 - The response suggestion endpoint uses deterministic templates only.
 
+## Gate 4.1 API Contract Update
+
+`POST /api/ml/analyze-review` now returns the required contract fields:
+
+- `review_id`, `business_id`, `platform`
+- `sentiment_label`, `sentiment_score`
+- `risk_score`, `risk_level`
+- `topics`, `tags`, `response_suggestion`
+- `model_name`, `model_version`, `analysis_method`
+- `analysis_id`, `analyzed_at`
+- `human_review_required`, `limitations`
+
+Traditional Chinese support was added through deterministic phrase matching for service, quality, price, sentiment, and risk signals. This remains a rules baseline and is not a trained multilingual model.
+
 ## Validation
 
 ```text
 Python compile apps/dashboard-ml/backend apps/dashboard-ml/ml apps/dashboard-ml/tests: PASS
-Dashboard tests: 20 passed, 1 warning
-ML endpoint focused tests: 9 passed, 1 warning
+Dashboard tests: 23 passed, 1 warning
+ML endpoint focused tests: 12 passed, 1 warning
 Core regression: 298 passed, 1 warning
 JavaScript syntax: PASS
 ```
@@ -46,7 +60,9 @@ JavaScript syntax: PASS
 
 - ML health identifies the offline rules baseline.
 - ML info disclaims original model restoration and production ML quality.
-- Single review analysis returns deterministic sentiment, risk, categories, matched terms, summary, actions, and text features.
+- Single review analysis returns the Gate 4.1 contract fields plus backward-compatible Gate 4 fields.
+- Traditional Chinese positive service/quality text is classified by deterministic phrase rules.
+- Traditional Chinese risk complaint text requires human review.
 - Batch analysis returns item-level output and aggregate sentiment/risk counts.
 - Empty batch is rejected.
 - AI response suggestion returns deterministic templates and requires human review.
@@ -55,8 +71,8 @@ JavaScript syntax: PASS
 
 ## Known Limits
 
-- English keyword rules are only a baseline and do not represent trained accuracy.
-- Multilingual sentiment quality is not accepted in this phase.
+- English and Traditional Chinese phrase rules are only a baseline and do not represent trained accuracy.
+- Multilingual quality beyond the covered Traditional Chinese phrase cases is not accepted in this phase.
 - No writeback to `analysis_results` was attempted.
 - No staging data, Auth, RLS, or Supabase integration was verified.
 - Model replacement should keep the API contract stable and add model-versioned tests.

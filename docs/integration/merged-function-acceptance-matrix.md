@@ -54,7 +54,7 @@ Status values:
 | 11 | Frontend Core API integration | IMPLEMENTED_AND_TESTED | `/api/config` serves `BI_RMP_CORE_API_URL`; frontend behavior tests and Playwright browser tests verify Core API calls. | Requires staging Core API URL at runtime for live validation. |
 | 12 | Direct Supabase access removal | IMPLEMENTED_AND_TESTED | Forbidden-token scan against `apps/dashboard-ml` returned no matches; Playwright browser request log verifies no direct Supabase calls. | Future frontend changes must keep the scan passing. |
 | 13 | ML health/info API | IMPLEMENTED_AND_TESTED | `GET /api/ml/health` and `GET /api/ml/info` tests pass and explicitly disclaim original model restoration. | Not a production trained ML model. |
-| 14 | ML review analysis | IMPLEMENTED_AND_TESTED | `POST /api/ml/analyze-review` and `POST /api/ml/analyze-batch` deterministic baseline tests pass. | English keyword rules only; no trained accuracy is claimed. |
+| 14 | ML review analysis | IMPLEMENTED_AND_TESTED | `POST /api/ml/analyze-review` contract, Traditional Chinese cases, deterministic analysis, and batch tests pass. | Phrase rules only; no trained accuracy is claimed. |
 | 15 | AI response suggestion | IMPLEMENTED_AND_TESTED | `POST /api/ai/suggest-response` deterministic template test passes. | No Ollama or LLM integration in this phase. |
 
 ## Current Acceptance Conclusion
@@ -63,7 +63,7 @@ Status values:
 Core backend: accepted at automated-test level
 Dashboard backend API: accepted at automated-test level
 Dashboard frontend: accepted at static, syntax, independent behavior-test, local smoke-test, and Playwright Chromium fake-Core level
-ML AI offline baseline: accepted at deterministic rules-test level only
+ML AI offline baseline: accepted at deterministic rules-test level with Gate 4.1 contract and Traditional Chinese phrase coverage
 Staging database behavior: not accepted live, intentionally not connected
 Deployment readiness: not accepted, deployment not in scope
 ```

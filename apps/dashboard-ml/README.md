@@ -92,6 +92,18 @@ Gate 4 adds a versioned deterministic baseline API:
 
 This baseline is not the original model, is not production-grade trained ML, and does not claim trained-model accuracy. Response suggestions use deterministic templates, not Ollama or another LLM.
 
+`POST /api/ml/analyze-review` returns the Gate 4.1 contract fields:
+
+- `review_id`, `business_id`, `platform`
+- `sentiment_label`, `sentiment_score`
+- `risk_score`, `risk_level`
+- `topics`, `tags`, `response_suggestion`
+- `model_name`, `model_version`, `analysis_method`
+- `analysis_id`, `analyzed_at`
+- `human_review_required`, `limitations`
+
+Traditional Chinese support is deterministic phrase matching for baseline service, quality, price, and risk signals. It is not a trained multilingual model.
+
 ## Core API Contract
 
 The UI consumes these read-only endpoints:

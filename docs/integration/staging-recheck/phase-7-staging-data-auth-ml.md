@@ -211,10 +211,11 @@ Scope limits:
 - No trained-model accuracy is claimed.
 - No fake pickle/joblib artifacts were created.
 - Ollama and other LLM integrations are deferred.
+- Gate 4.1 adds required analysis contract fields and Traditional Chinese phrase support, still as deterministic rules only.
 
 Validation:
 
 ```text
-Dashboard tests including ML baseline: 20 passed, 1 warning
+Dashboard tests including ML baseline: 23 passed, 1 warning
 Core regression: 298 passed, 1 warning
 ```

@@ -213,9 +213,9 @@ Observed:
 ```text
 compileall: passed
 node --check: passed
-Dashboard independent pytest: 20 passed, 1 warning
+Dashboard independent pytest: 23 passed, 1 warning
 Dashboard Playwright Chromium acceptance: 5 passed
-ML offline baseline focused pytest: 9 passed, 1 warning
+ML offline baseline focused pytest: 12 passed, 1 warning
 Dashboard app validation passed
 apps/dashboard-ml forbidden-token scan: no matches
 ```
