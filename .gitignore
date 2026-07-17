@@ -1,6 +1,12 @@
 .env
 .env.*
 !.env.example
+!.env.*.example
+.env.staging
+.env.core
+.env.dashboard
+.env.n8n
+supabase/.temp/
 .venv/
 venv/
 node_modules/
