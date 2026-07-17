@@ -259,6 +259,15 @@
     els.closeDialog.addEventListener("click", () => els.reviewDialog.close());
   }
 
+  if (window.__BI_RMP_DASHBOARD_TEST_MODE__) {
+    window.__BI_RMP_DASHBOARD_TEST__ = {
+      endpoint,
+      loadDashboard,
+      openReview,
+      state,
+    };
+  }
+
   wireEvents();
   loadDashboard();
 })();

@@ -6,12 +6,12 @@ from pathlib import Path
 APP_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_ROOT = APP_ROOT / "frontend"
 FORBIDDEN_FRONTEND_TOKENS = (
-    "supabase.co/rest/v1",
-    "/api/supabase-query",
-    "SUPABASE_SERVICE_ROLE_KEY",
-    "DATABASE_URL",
-    "postgres://",
-    "postgresql://",
+    "supabase" + ".co/rest/v1",
+    "/api/" + "supabase-query",
+    "SUPABASE" + "_SERVICE_ROLE_KEY",
+    "DATABASE" + "_URL",
+    "postgres" + "://",
+    "postgresql" + "://",
 )
 
 

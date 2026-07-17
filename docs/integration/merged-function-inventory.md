@@ -2,7 +2,7 @@
 
 Branch: `integration/bi-rmp-v2-staging-v2`
 Observed baseline before Dashboard rebuild: `f6fb7c6`
-Inventory method: static source, test, document review, and rebuilt Dashboard application checks.
+Inventory method: static source, test, document review, rebuilt Dashboard application checks, and local smoke validation.
 
 Not performed in this inventory: Supabase init/link/query, migration, db push, live crawler run, ML model load/inference, n8n startup, LINE live test, deployment, main merge, or main push.
 
@@ -14,7 +14,7 @@ Not performed in this inventory: Supabase init/link/query, migration, db push, l
 | Runner CLI | Present at `Backend/runner.py` |
 | Platform adapters | Present under `Backend/adapters` for PTT, Google Maps, Threads, and web crawl4ai |
 | Dashboard backend read API | Present at `Backend/api/dashboard.py` |
-| Dashboard frontend app | Present under `apps/dashboard-ml` as a rebuilt read-only Dashboard application |
+| Dashboard frontend app | Present under `apps/dashboard-ml` as a rebuilt read-only Dashboard application; not a restored original UI |
 | Existing frontend | Present: `Frontend/register/index.html`, LIFF registration page only |
 | Dashboard API contract doc | Present: `docs/integration/dashboard-read-api.md` |
 | Supabase local project folder | Not used in this inventory |
@@ -57,11 +57,11 @@ Dashboard backend API exists. Dashboard frontend application has been rebuilt un
 | 5 | Pagination | `Backend/api/dashboard.py` | `page`, `page_size` query params | `Backend/tests/api/test_dashboard.py` | 3 |
 | 6 | Business filter | `Backend/api/dashboard.py` | `business_id` query param | `Backend/tests/api/test_dashboard.py` | 2 |
 | 7 | Platform filter | `Backend/api/dashboard.py` | `platform` query param | `Backend/tests/api/test_dashboard.py` | 2 |
-| 8 | Empty state | `apps/dashboard-ml/frontend/app.js`, `index.html` | Dashboard UI empty review state | Static validation and JS syntax check | 1 |
-| 9 | Error state | `Backend/api/dashboard.py`, `apps/dashboard-ml/frontend/app.js` | Sanitized 503 backend responses and Dashboard UI error banner | `Backend/tests/api/test_dashboard.py`, frontend static validation | 3 |
-| 10 | Dashboard frontend | `apps/dashboard-ml/frontend/index.html`, `app.js`, `styles.css` | Read-only Dashboard UI | `node --check`, app validation tool | 2 |
-| 11 | Frontend Core API integration | `apps/dashboard-ml/backend/app.py`, `apps/dashboard-ml/frontend/app.js` | Runtime config from `BI_RMP_CORE_API_URL`; Core API HTTP client | App validation tool and static scan | 2 |
-| 12 | Direct Supabase access removal | `apps/dashboard-ml/frontend`, `apps/dashboard-ml/tools/validate_dashboard_app.py` | Frontend calls Core API only | Forbidden-token scan against Dashboard frontend | 1 |
+| 8 | Empty state | `apps/dashboard-ml/frontend/app.js`, `index.html` | Dashboard UI empty review state | `apps/dashboard-ml/tests/frontend_behavior.test.js` | 1 |
+| 9 | Error state | `Backend/api/dashboard.py`, `apps/dashboard-ml/frontend/app.js` | Sanitized 503 backend responses and Dashboard UI error banner | `Backend/tests/api/test_dashboard.py`, Dashboard frontend behavior tests | 3 |
+| 10 | Dashboard frontend | `apps/dashboard-ml/frontend/index.html`, `app.js`, `styles.css` | `GET /dashboard`, static JS/CSS | `apps/dashboard-ml/tests/test_dashboard_backend.py`, `node --check`, app validation tool | 4 |
+| 11 | Frontend Core API integration | `apps/dashboard-ml/backend/app.py`, `apps/dashboard-ml/frontend/app.js` | `GET /api/config`; Core API HTTP client | Dashboard backend and frontend behavior tests | 4 |
+| 12 | Direct Supabase access removal | `apps/dashboard-ml/frontend`, `apps/dashboard-ml/tools/validate_dashboard_app.py` | Frontend calls Core API only | Forbidden-token scan against `apps/dashboard-ml`; frontend behavior tests | 2 |
 
 ## Dashboard Separation
 
@@ -70,4 +70,5 @@ Dashboard backend API: present
 Dashboard frontend application: present under apps/dashboard-ml
 Frontend Core API integration: implemented through BI_RMP_CORE_API_URL runtime config
 Direct Supabase access removal: statically verified for apps/dashboard-ml/frontend
+Original Dashboard parity: not claimed; this is a rebuilt application
 ```

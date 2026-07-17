@@ -1,6 +1,8 @@
 # BI-RMP Dashboard ML
 
 This is a rebuilt Dashboard application for the BI-RMP Core Dashboard read API.
+It is not a restoration of the original Dashboard source and is not claimed to
+match the original UI exactly.
 
 The application is intentionally read-only:
 
@@ -13,24 +15,29 @@ The application is intentionally read-only:
 
 ```text
 apps/dashboard-ml
-├── backend
-│   └── app.py
-├── frontend
-│   ├── app.js
-│   ├── index.html
-│   └── styles.css
-├── ml
-│   └── safe_text_features.py
-├── models
-│   └── .gitkeep
-├── prompts
-│   └── dashboard-analysis.md
-├── streamlit
-│   └── README.md
-├── tools
-│   └── validate_dashboard_app.py
-├── .env.example
-└── requirements.txt
+|-- backend
+|   |-- api_server.py
+|   `-- app.py
+|-- frontend
+|   |-- app.js
+|   |-- index.html
+|   `-- styles.css
+|-- ml
+|   `-- safe_text_features.py
+|-- models
+|   `-- .gitkeep
+|-- prompts
+|   `-- dashboard-analysis.md
+|-- streamlit
+|   `-- README.md
+|-- tests
+|   |-- frontend_behavior.test.js
+|   |-- test_dashboard_backend.py
+|   `-- test_frontend_behavior.py
+|-- tools
+|   `-- validate_dashboard_app.py
+|-- .env.example
+`-- requirements.txt
 ```
 
 ## Run Locally
@@ -41,11 +48,12 @@ Install dependencies in the repository virtual environment:
 .\.venv\Scripts\python.exe -m pip install -r apps\dashboard-ml\requirements.txt
 ```
 
-Start the Dashboard application:
+Start the Dashboard application with an explicit app directory because the
+`dashboard-ml` directory name contains a hyphen:
 
 ```powershell
 $env:BI_RMP_CORE_API_URL = "http://127.0.0.1:8000"
-.\.venv\Scripts\python.exe -m uvicorn backend.app:app `
+.\.venv\Scripts\python.exe -m uvicorn backend.api_server:app `
   --app-dir apps\dashboard-ml `
   --host 127.0.0.1 `
   --port 8010
@@ -54,18 +62,19 @@ $env:BI_RMP_CORE_API_URL = "http://127.0.0.1:8000"
 Open:
 
 ```text
-http://127.0.0.1:8010
+http://127.0.0.1:8010/dashboard
 ```
 
 ## Verification
 
 ```powershell
-.\.venv\Scripts\python.exe -m compileall -q `
+.\.venv\Scripts\python.exe -m compileall `
   apps\dashboard-ml\backend `
-  apps\dashboard-ml\ml `
-  apps\dashboard-ml\tools
+  apps\dashboard-ml\tests
 
 node --check apps\dashboard-ml\frontend\app.js
+
+.\.venv\Scripts\python.exe -m pytest apps\dashboard-ml\tests -q
 
 .\.venv\Scripts\python.exe apps\dashboard-ml\tools\validate_dashboard_app.py
 ```

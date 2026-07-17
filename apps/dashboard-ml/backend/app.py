@@ -38,20 +38,31 @@ def health() -> dict[str, object]:
     }
 
 
-@app.get("/config.js")
-def config_js() -> Response:
-    payload = {
+@app.get("/api/config")
+def config() -> dict[str, str]:
+    return {
         "coreApiBaseUrl": _core_api_base_url(),
         "dashboardApiPrefix": "/api/dashboard",
     }
-    body = "window.__BI_RMP_DASHBOARD_CONFIG__ = " + json.dumps(payload, separators=(",", ":")) + ";\n"
+
+
+@app.get("/config.js")
+def config_js() -> Response:
+    body = "window.__BI_RMP_DASHBOARD_CONFIG__ = " + json.dumps(config(), separators=(",", ":")) + ";\n"
     return Response(content=body, media_type="application/javascript")
 
 
 @app.get("/")
+@app.get("/dashboard")
 def index() -> FileResponse:
     return FileResponse(FRONTEND_ROOT / "index.html")
 
+
+app.mount(
+    "/static",
+    StaticFiles(directory=FRONTEND_ROOT),
+    name="dashboard-static",
+)
 
 app.mount(
     "/assets",

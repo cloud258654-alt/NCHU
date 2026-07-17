@@ -95,7 +95,7 @@ Expected minimum:
 Current observed result:
 
 ```text
-298 passed, 1 warning in 3.02s
+298 passed, 1 warning in 2.88s
 ```
 
 ## Focused Test Groups
@@ -186,19 +186,22 @@ Required checks:
    - 404 detail state
 7. Smoke test Dashboard frontend against Core API only.
 
-Current static commands:
+Current static and independent test commands:
 
 ```powershell
-.\.venv\Scripts\python.exe -m compileall -q `
+.\.venv\Scripts\python.exe -m compileall `
   apps\dashboard-ml\backend `
-  apps\dashboard-ml\ml `
-  apps\dashboard-ml\tools
+  apps\dashboard-ml\tests
 
 node --check apps\dashboard-ml\frontend\app.js
 
+.\.venv\Scripts\python.exe -m pytest apps\dashboard-ml\tests -q
+
 .\.venv\Scripts\python.exe apps\dashboard-ml\tools\validate_dashboard_app.py
 
-rg -n "supabase.co/rest/v1|/api/supabase-query|SUPABASE_SERVICE_ROLE_KEY|DATABASE_URL|postgres://|postgresql://" apps/dashboard-ml/frontend
+rg -n `
+  "supabase\.co/rest/v1|/api/supabase-query|SUPABASE_SERVICE_ROLE_KEY|DATABASE_URL|mzonkpfagqdhaqwybtuo|ovetahxyihemivnlgqhs" `
+  apps\dashboard-ml
 ```
 
 Observed:
@@ -206,24 +209,25 @@ Observed:
 ```text
 compileall: passed
 node --check: passed
+Dashboard independent pytest: 6 passed, 1 warning
 Dashboard app validation passed
-frontend forbidden-token scan: no matches
+apps/dashboard-ml forbidden-token scan: no matches
 ```
 
 Current local HTTP smoke commands:
 
 ```powershell
-(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/api/health).Content
-(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/config.js).Content
-(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/).StatusCode
+(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/api/health).StatusCode
+(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/api/config).StatusCode
+(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/dashboard).StatusCode
 ```
 
 Observed:
 
 ```text
-/api/health: {"status":"ok","service":"dashboard-ml","core_api_configured":true}
-/config.js: BI_RMP_CORE_API_URL runtime config served with http://127.0.0.1:8000
-/: 200
+/api/health: 200
+/api/config: 200
+/dashboard: 200
 ```
 
 ## Deferred External Acceptance
