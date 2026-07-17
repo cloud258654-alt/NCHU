@@ -10,6 +10,7 @@ The application is intentionally read-only:
 - No frontend code talks directly to Supabase.
 - No database URL, service role key, or project secret is required by this app.
 - No model pickle or joblib artifact is loaded by default.
+- Gate 4 offline analysis uses deterministic rules only; it is not a restored trained model.
 
 ## Structure
 
@@ -78,6 +79,18 @@ node --check apps\dashboard-ml\frontend\app.js
 
 .\.venv\Scripts\python.exe apps\dashboard-ml\tools\validate_dashboard_app.py
 ```
+
+## Offline Analysis API
+
+Gate 4 adds a versioned deterministic baseline API:
+
+- `GET /api/ml/health`
+- `GET /api/ml/info`
+- `POST /api/ml/analyze-review`
+- `POST /api/ml/analyze-batch`
+- `POST /api/ai/suggest-response`
+
+This baseline is not the original model, is not production-grade trained ML, and does not claim trained-model accuracy. Response suggestions use deterministic templates, not Ollama or another LLM.
 
 ## Core API Contract
 

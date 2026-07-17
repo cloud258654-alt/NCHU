@@ -18,7 +18,7 @@ Not allowed in this plan without a separate explicit phase:
 - Supabase init/link/query.
 - Migration or db push.
 - Live crawler run.
-- ML model load, pickle/joblib load, or ML inference.
+- Trained ML model load, pickle/joblib load, LLM calls, or production ML inference.
 - n8n startup or workflow mutation.
 - LINE live test.
 - Staging or production deployment.
@@ -199,6 +199,8 @@ node --check apps\dashboard-ml\frontend\app.js
 
 .\.venv\Scripts\python.exe -m pytest apps\dashboard-ml\tests\test_dashboard_browser_acceptance.py -q
 
+.\.venv\Scripts\python.exe -m pytest apps\dashboard-ml\tests\test_ml_offline_baseline.py -q
+
 .\.venv\Scripts\python.exe apps\dashboard-ml\tools\validate_dashboard_app.py
 
 rg -n `
@@ -211,8 +213,9 @@ Observed:
 ```text
 compileall: passed
 node --check: passed
-Dashboard independent pytest: 11 passed, 1 warning
+Dashboard independent pytest: 20 passed, 1 warning
 Dashboard Playwright Chromium acceptance: 5 passed
+ML offline baseline focused pytest: 9 passed, 1 warning
 Dashboard app validation passed
 apps/dashboard-ml forbidden-token scan: no matches
 ```
@@ -241,7 +244,7 @@ These checks require separate explicit approval:
 | --- | --- |
 | Supabase | init/link/project-ref verification, migration dry-run, db push, live read/write checks |
 | Crawlers | live PTT, Google Maps, Threads runs |
-| ML | model load/inference beyond deterministic safe text features |
+| ML | trained model restoration/replacement, multilingual evaluation, writeback, and LLM/Ollama integration |
 | n8n | workflow startup and authenticated internal API calls |
 | LINE | LIFF live login and Messaging API push/reply |
 | Deployment | staging and production deploy validation |

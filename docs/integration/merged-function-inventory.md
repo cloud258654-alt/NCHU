@@ -4,7 +4,7 @@ Branch: `integration/bi-rmp-v2-staging-v2`
 Observed baseline before Dashboard rebuild: `f6fb7c6`
 Inventory method: static source, test, document review, rebuilt Dashboard application checks, and local smoke validation.
 
-Not performed in this inventory: Supabase init/link/query, migration, db push, live crawler run, ML model load/inference, n8n startup, LINE live test, deployment, main merge, or main push.
+Not performed in this inventory: Supabase init/link/query, migration, db push, live crawler run, trained ML model load, LLM integration, n8n startup, LINE live test, deployment, main merge, or main push.
 
 ## Repository State Summary
 
@@ -15,6 +15,7 @@ Not performed in this inventory: Supabase init/link/query, migration, db push, l
 | Platform adapters | Present under `Backend/adapters` for PTT, Google Maps, Threads, and web crawl4ai |
 | Dashboard backend read API | Present at `Backend/api/dashboard.py` |
 | Dashboard frontend app | Present under `apps/dashboard-ml` as a rebuilt read-only Dashboard application; not a restored original UI |
+| ML AI offline baseline | Present under `apps/dashboard-ml/ml` and `apps/dashboard-ml/backend`; deterministic rules baseline only |
 | Existing frontend | Present: `Frontend/register/index.html`, LIFF registration page only |
 | Dashboard API contract doc | Present: `docs/integration/dashboard-read-api.md` |
 | Supabase local project folder | Not used in this inventory |
@@ -62,6 +63,9 @@ Dashboard backend API exists. Dashboard frontend application has been rebuilt un
 | 10 | Dashboard frontend | `apps/dashboard-ml/frontend/index.html`, `app.js`, `styles.css` | `GET /dashboard`, static JS/CSS | `apps/dashboard-ml/tests/test_dashboard_backend.py`, `node --check`, app validation tool | 4 |
 | 11 | Frontend Core API integration | `apps/dashboard-ml/backend/app.py`, `apps/dashboard-ml/frontend/app.js` | `GET /api/config`; Core API HTTP client | Dashboard backend and frontend behavior tests | 4 |
 | 12 | Direct Supabase access removal | `apps/dashboard-ml/frontend`, `apps/dashboard-ml/tools/validate_dashboard_app.py` | Frontend calls Core API only | Forbidden-token scan against `apps/dashboard-ml`; frontend behavior tests | 2 |
+| 13 | ML health/info API | `apps/dashboard-ml/backend/app.py`, `apps/dashboard-ml/ml/rules_baseline.py` | `GET /api/ml/health`, `GET /api/ml/info` | `apps/dashboard-ml/tests/test_ml_offline_baseline.py` | 2 |
+| 14 | ML review analysis | `apps/dashboard-ml/backend/app.py`, `apps/dashboard-ml/ml/rules_baseline.py` | `POST /api/ml/analyze-review`, `POST /api/ml/analyze-batch` | `apps/dashboard-ml/tests/test_ml_offline_baseline.py` | 5 |
+| 15 | AI response suggestion | `apps/dashboard-ml/backend/app.py`, `apps/dashboard-ml/ml/rules_baseline.py` | `POST /api/ai/suggest-response` | `apps/dashboard-ml/tests/test_ml_offline_baseline.py` | 1 |
 
 ## Dashboard Separation
 
@@ -71,4 +75,5 @@ Dashboard frontend application: present under apps/dashboard-ml
 Frontend Core API integration: implemented through BI_RMP_CORE_API_URL runtime config
 Direct Supabase access removal: statically verified for apps/dashboard-ml/frontend
 Original Dashboard parity: not claimed; this is a rebuilt application
+ML AI baseline: deterministic rules baseline only; original trained model parity and accuracy are not claimed
 ```

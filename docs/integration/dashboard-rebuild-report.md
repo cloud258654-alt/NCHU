@@ -36,7 +36,7 @@ Dashboard frontend under `apps/dashboard-ml/frontend`:
 
 ## ML Status
 
-ML behavior is not implemented in this rebuild. The `ml` directory contains only deterministic safe text-feature helper code. No pickle or joblib model is loaded.
+Gate 4 adds an offline deterministic rules baseline under `apps/dashboard-ml/ml`. This is not the original restored model, not production-grade trained machine learning, and no trained-model accuracy is claimed. No pickle or joblib model is loaded or created.
 
 ## Validation Results
 
@@ -55,7 +55,7 @@ node --check apps/dashboard-ml/frontend/app.js: PASS
 Dashboard independent tests:
 
 ```text
-11 passed, 1 warning
+20 passed, 1 warning
 ```
 
 Core regression:
@@ -91,4 +91,4 @@ Playwright Chromium acceptance: 5 passed
 - Visual parity with the original Dashboard was not tested and is not claimed.
 - Live staging Core API and live staging data were not contacted.
 - Supabase initialization, link, migration dry-run, and db push remain separate phases.
-- ML inference and model artifact validation remain separate phases.
+- Trained ML model restoration/replacement and LLM integration remain separate phases.
