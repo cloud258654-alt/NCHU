@@ -1,0 +1,37 @@
+version: urs_v1
+
+analysis:
+  mode: none
+
+google_maps:
+  native_weight: 0.70
+  sentiment_weight: 0.30
+
+ptt:
+  native_weight: 0.45
+  sentiment_weight: 0.55
+  prior_strength: 5
+
+ptt_comment:
+  native_weight: 0.35
+  sentiment_weight: 0.65
+  push_score: 75
+  boo_score: 25
+  arrow_score: 50
+
+threads:
+  sentiment_weight: 1.0
+  engagement:
+    like: 1.0
+    reply: 1.5
+    repost: 2.0
+    quote: 2.0
+    view: 0.05
+
+aggregation:
+  prior_n: 5
+  target_sample_count: 20
+  platform_weights:
+    google_maps: 1.0
+    ptt: 1.0
+    threads: 1.0

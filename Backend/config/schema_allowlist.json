@@ -1,0 +1,28 @@
+{
+  "schema": "public",
+  "tables": [
+    "alerts",
+    "analysis_results",
+    "business",
+    "client_messages_log",
+    "clients",
+    "comment_metric_snapshots",
+    "crawl_comments",
+    "crawl_jobs",
+    "crawl_logs",
+    "crawl_posts",
+    "post_metric_snapshots",
+    "reputation_score_snapshots",
+    "service_tasks"
+  ],
+  "protected_tables": [
+    "reviews_enriched",
+    "master_reviews_enriched"
+  ],
+  "protected_table_patterns": [
+    "review%"
+  ],
+  "views": [
+    "reviews_enriched"
+  ]
+}

@@ -1,0 +1,43 @@
+project-root/
+  docs/
+    requirements-spec.md
+    product-feature-spec.md
+    system-design.md
+    database-design.md
+    api-spec.md
+    deployment-guide.md
+
+  backend/
+    app/
+      api/
+      models/
+      schemas/
+      services/
+      repositories/
+      core/
+      workers/
+
+  crawler/
+    adapters/
+    services/
+    utils/
+
+  analysis/
+    sentiment/
+    topic/
+    summarizer/
+    recommender/
+
+  n8n/
+    workflows/
+    README.md
+
+  database/
+    schema.sql
+    migrations/
+    seed.sql
+
+  tests/
+    backend/
+    crawler/
+    analysis/

@@ -1,0 +1,12 @@
+crawler/
+  adapters/
+    dcard_adapter.py
+    ptt_adapter.py
+    google_maps_adapter.py
+  services/
+    crawl_job_runner.py
+    post_normalizer.py
+    comment_normalizer.py
+  utils/
+    dedupe.py
+    text_cleaner.py
