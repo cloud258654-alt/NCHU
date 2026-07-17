@@ -96,3 +96,10 @@ Secret/direct-Supabase frontend checks:
 ## Final Phase 5 Status
 
 Phase 5 backend Dashboard API validation is complete in this checkout.
+
+## 2026-07-17 Staging Recheck
+
+The staging recheck did not update this status to frontend integration complete.
+`apps/dashboard-ml` is still absent in this checkout, so browser/network
+validation and Dashboard frontend integration remain blocked. See
+`docs/integration/staging-recheck/phase-5-frontend-integration-report.md`.

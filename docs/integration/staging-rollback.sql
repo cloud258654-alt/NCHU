@@ -1,0 +1,12 @@
+-- BI-RMP-V2 staging rollback placeholder.
+-- Date: 2026-07-17
+--
+-- No Phase 6 staging migration was created because the phase was blocked by
+-- unmet preconditions. This file intentionally contains no executable rollback
+-- SQL.
+--
+-- Before adding rollback SQL:
+-- 1. Create and review the corresponding forward migration.
+-- 2. Confirm the target Supabase project ref is qlhykeeyjaoikczoambe.
+-- 3. Avoid including secrets or connection strings.
+-- 4. Review destructive statements manually before execution.
