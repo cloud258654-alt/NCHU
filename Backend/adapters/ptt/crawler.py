@@ -265,6 +265,17 @@ def _parse_prev_page_url(html: str) -> str | None:
     return None
 
 
+def _deadline_reached(deadline: float | None) -> bool:
+    return deadline is not None and time.monotonic() >= deadline
+
+
+def _timeout_for_deadline(deadline: float | None, default: int = 20) -> int:
+    if deadline is None:
+        return default
+    remaining = max(1.0, deadline - time.monotonic())
+    return max(1, min(default, int(remaining)))
+
+
 def _title_matches_query(title: str, query: str, business_name: str | None = None, input_keyword: str | None = None) -> bool:
     if business_name:
         return contains_business_name(title, business_name)
@@ -287,6 +298,7 @@ async def _discover_board_index_urls_multi_variants(
     business_name: str | None,
     input_keyword: str | None,
     variants: list[str],
+    deadline: float | None = None,
     diagnostics: dict | None = None,
 ) -> list[str]:
     urls: list[str] = []
@@ -295,6 +307,8 @@ async def _discover_board_index_urls_multi_variants(
     current_url = f"https://www.ptt.cc/bbs/{quote(board, safe='')}/index.html"
     
     for page_idx in range(max_pages):
+        if _deadline_reached(deadline):
+            break
         if page_idx > 0:
             await _polite_sleep(
                 PTT_BOARD_DELAY_MIN_SECONDS,
@@ -306,7 +320,8 @@ async def _discover_board_index_urls_multi_variants(
                 _fetch_text_with_retry,
                 current_url,
                 headers=PTT_OVER18_HEADERS,
-                timeout=20,
+                timeout=_timeout_for_deadline(deadline),
+                attempts=1 if deadline is not None else PTT_FETCH_ATTEMPTS,
                 diagnostics=diagnostics,
             )
         except Exception as exc:
@@ -346,7 +361,13 @@ async def _discover_board_index_urls_multi_variants(
     return urls[:max_results]
 
 
-async def discover_ptt_urls(query: str, max_results: int, args, diagnostics: dict | None = None) -> list[str]:
+async def discover_ptt_urls(
+    query: str,
+    max_results: int,
+    args,
+    diagnostics: dict | None = None,
+    deadline: float | None = None,
+) -> list[str]:
     """Find public PTT article URLs for a global keyword query."""
     
     # 1. Determine query variants
@@ -369,8 +390,14 @@ async def discover_ptt_urls(query: str, max_results: int, args, diagnostics: dic
     
     # 1. Global search engine discovery
     for engine_name in engine_names_for(getattr(args, "engine", "duckduckgo"), config):
+        if _deadline_reached(deadline):
+            args.ptt_deadline_reached = True
+            break
         engines_tried.append(engine_name)
         for variant in variants:
+            if _deadline_reached(deadline):
+                args.ptt_deadline_reached = True
+                break
             remaining = max_results - len(urls)
             if remaining <= 0:
                 break
@@ -404,6 +431,9 @@ async def discover_ptt_urls(query: str, max_results: int, args, diagnostics: dic
         fallback_boards_tried.append(board)
         logger.info("PTT board fallback started")
         for variant in variants:
+            if _deadline_reached(deadline):
+                args.ptt_deadline_reached = True
+                break
             remaining = max_results - len(urls)
             if remaining <= 0:
                 break
@@ -413,6 +443,8 @@ async def discover_ptt_urls(query: str, max_results: int, args, diagnostics: dic
                     variant,
                     board,
                     remaining,
+                    timeout=_timeout_for_deadline(deadline),
+                    attempts=1 if deadline is not None else PTT_FETCH_ATTEMPTS,
                     diagnostics=diagnostics,
                 )
                 for url in board_urls:
@@ -432,9 +464,15 @@ async def discover_ptt_urls(query: str, max_results: int, args, diagnostics: dic
         logger.info("PTT board fallback started")
         first_search = True
         for board in DEFAULT_PTT_FALLBACK_BOARDS:
+            if _deadline_reached(deadline):
+                args.ptt_deadline_reached = True
+                break
             fallback_boards_tried.append(board)
             board_found = False
             for variant in variants:
+                if _deadline_reached(deadline):
+                    args.ptt_deadline_reached = True
+                    break
                 remaining = max_results - len(urls)
                 if remaining <= 0:
                     break
@@ -450,6 +488,8 @@ async def discover_ptt_urls(query: str, max_results: int, args, diagnostics: dic
                         variant,
                         board,
                         remaining,
+                        timeout=_timeout_for_deadline(deadline),
+                        attempts=1 if deadline is not None else PTT_FETCH_ATTEMPTS,
                         diagnostics=diagnostics,
                     )
                     for url in board_urls:
@@ -475,6 +515,9 @@ async def discover_ptt_urls(query: str, max_results: int, args, diagnostics: dic
         first_scan = True
         boards_to_scan = [args.board] if getattr(args, "board", None) else DEFAULT_PTT_FALLBACK_BOARDS
         for board in boards_to_scan:
+            if _deadline_reached(deadline):
+                args.ptt_deadline_reached = True
+                break
             index_boards_tried.append(board)
             remaining = max_results - len(urls)
             if remaining <= 0:
@@ -494,6 +537,7 @@ async def discover_ptt_urls(query: str, max_results: int, args, diagnostics: dic
                     business_name=business_name,
                     input_keyword=input_keyword,
                     variants=variants,
+                    deadline=deadline,
                     diagnostics=diagnostics,
                 )
                 for url in board_urls:
@@ -538,13 +582,21 @@ def ptt_url_metadata(url: str) -> dict[str, str]:
     return match.groupdict() if match else {}
 
 
-def _discover_board_search_urls(query: str, board: str, max_results: int, diagnostics: dict | None = None) -> list[str]:
+def _discover_board_search_urls(
+    query: str,
+    board: str,
+    max_results: int,
+    diagnostics: dict | None = None,
+    timeout: int = 20,
+    attempts: int = PTT_FETCH_ATTEMPTS,
+) -> list[str]:
     url = f"https://www.ptt.cc/bbs/{quote(board, safe='')}/search"
     html = _fetch_text_with_retry(
         url,
         params={"q": query},
         headers=PTT_OVER18_HEADERS,
-        timeout=20,
+        timeout=timeout,
+        attempts=attempts,
         diagnostics=diagnostics,
     )
     return [
@@ -628,9 +680,15 @@ async def scrape_ptt(
     candidate_max = max_results
     try:
         if diagnostics is not None:
-            urls = await discover_ptt_urls(query, candidate_max, args, diagnostics=diagnostics)
+            urls = await discover_ptt_urls(
+                query,
+                candidate_max,
+                args,
+                diagnostics=diagnostics,
+                deadline=deadline,
+            )
         else:
-            urls = await discover_ptt_urls(query, candidate_max, args)
+            urls = await discover_ptt_urls(query, candidate_max, args, deadline=deadline)
     except TypeError:
         urls = await discover_ptt_urls(query, candidate_max, args)
     if deadline is not None and time.monotonic() >= deadline:

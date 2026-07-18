@@ -16,6 +16,7 @@ from adapters.ptt.crawler import (
     _fetch_error_type,
     _query_variants,
     _query_matches_content,
+    discover_ptt_urls,
     normalize_ptt_article_url,
     parse_ptt_article_html,
     scrape_ptt,
@@ -41,6 +42,28 @@ async def test_scrape_ptt_stops_after_discovery_when_soft_deadline_is_reached(mo
     )
 
     assert posts == []
+    assert args.ptt_deadline_reached is True
+
+
+@pytest.mark.asyncio
+async def test_discover_ptt_urls_stops_when_deadline_is_already_reached():
+    args = Namespace(
+        business_name="Demo Shop",
+        input_keyword=None,
+        engine="duckduckgo",
+        searxng_url=None,
+        board=None,
+        ptt_deadline_reached=False,
+    )
+
+    urls = await discover_ptt_urls(
+        "Demo Shop",
+        1,
+        args,
+        deadline=ptt_crawler.time.monotonic() - 1,
+    )
+
+    assert urls == []
     assert args.ptt_deadline_reached is True
 
 
