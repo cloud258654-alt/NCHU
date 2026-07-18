@@ -13,7 +13,10 @@ from core.crawled_post_models import (
     extract_post_metrics,
     standardize_crawled_post,
 )
-from core.runtime_settings import validate_staging_database_target
+from core.runtime_settings import (
+    validate_database_writes_enabled,
+    validate_staging_database_target,
+)
 
 try:
     from dotenv import load_dotenv
@@ -191,6 +194,7 @@ def get_connection():
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise ValueError("DATABASE_URL is required for PostgreSQL writes")
+    validate_database_writes_enabled()
     validate_staging_database_target()
     conn = psycopg2.connect(database_url)
     conn.set_client_encoding("UTF8")

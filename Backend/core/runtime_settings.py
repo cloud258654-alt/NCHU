@@ -55,6 +55,10 @@ class StagingTargetError(ValueError):
     """Raised when runtime configuration points at a forbidden database target."""
 
 
+class DatabaseWritesDisabledError(ValueError):
+    """Raised when writable database access is disabled by runtime configuration."""
+
+
 def _resolve_project_path(value: str) -> str:
     path = Path(value)
     if not path.is_absolute():
@@ -81,6 +85,16 @@ def _extract_project_ref_from_url(value: str) -> str | None:
     return None
 
 
+def _database_url_has_remote_host(value: str) -> bool:
+    if not value:
+        return False
+    parsed = urlparse(value)
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    return host not in {"localhost", "127.0.0.1", "::1"}
+
+
 def _configured_project_refs() -> dict[str, str]:
     refs: dict[str, str] = {}
     explicit_ref = os.getenv("SUPABASE_PROJECT_REF", "").strip()
@@ -94,8 +108,7 @@ def _configured_project_refs() -> dict[str, str]:
     return refs
 
 
-def validate_staging_database_target() -> None:
-    refs = _configured_project_refs()
+def _raise_for_blocked_refs(refs: dict[str, str]) -> None:
     blocked = sorted(set(refs.values()) & BLOCKED_SUPABASE_PROJECT_REFS)
     if blocked:
         raise StagingTargetError(
@@ -103,9 +116,40 @@ def validate_staging_database_target() -> None:
             + ", ".join(blocked)
         )
 
+
+def validate_database_writes_enabled() -> None:
+    if not _env_bool("ALLOW_DATABASE_WRITES", default=False):
+        raise DatabaseWritesDisabledError(
+            "Database writes are disabled for this environment"
+        )
+
+
+def validate_staging_database_target() -> None:
+    refs = _configured_project_refs()
     app_env = os.getenv("APP_ENV", "").strip().lower()
-    if app_env != "staging":
+
+    if app_env == "production":
+        if not _env_bool("ALLOW_PRODUCTION_DB", default=False):
+            raise StagingTargetError(
+                "APP_ENV=production requires ALLOW_PRODUCTION_DB=true"
+            )
         return
+
+    if app_env == "local":
+        _raise_for_blocked_refs(refs)
+        return
+
+    if app_env == "":
+        if _env_bool("ALLOW_DATABASE_WRITES", default=False) and _database_url_has_remote_host(
+            os.getenv("DATABASE_URL", "").strip()
+        ):
+            raise StagingTargetError(
+                "APP_ENV must be set before remote database writes"
+            )
+        return
+
+    if app_env != "staging":
+        raise StagingTargetError(f"unsupported APP_ENV: {app_env}")
 
     project_ref = refs.get("SUPABASE_PROJECT_REF")
     if project_ref != STAGING_PROJECT_REF:
@@ -129,7 +173,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 APP_ENV = os.getenv("APP_ENV", "local").strip()
 DATABASE_TARGET = os.getenv("DATABASE_TARGET", "").strip()
 ALLOW_PRODUCTION_DB = _env_bool("ALLOW_PRODUCTION_DB", default=False)
-ALLOW_DATABASE_WRITES = _env_bool("ALLOW_DATABASE_WRITES", default=True)
+ALLOW_DATABASE_WRITES = _env_bool("ALLOW_DATABASE_WRITES", default=False)
 SUPABASE_PROJECT_NAME = os.getenv("SUPABASE_PROJECT_NAME", "").strip()
 SUPABASE_PROJECT_REF = os.getenv("SUPABASE_PROJECT_REF", "").strip()
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
