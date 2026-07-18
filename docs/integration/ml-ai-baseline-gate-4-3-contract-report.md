@@ -42,7 +42,9 @@ schema contract. Critical cases are represented additively:
 
 - `critical`: boolean
 - `critical_signals`: matched critical terms
-- `escalation_level`: `critical` when critical signals are present
+- `escalation_level`: one of `none`, `review`, `urgent`, or `critical`
+
+Critical signals produce `escalation_level=critical`.
 
 `GET /api/ml/info` exposes:
 
@@ -97,8 +99,8 @@ rules-v1-2-0-[0-9a-f]{32}
 ```text
 Python compile apps/dashboard-ml/backend apps/dashboard-ml/ml apps/dashboard-ml/tests: PASS
 JavaScript syntax apps/dashboard-ml/frontend/app.js: PASS
-Dashboard tests: 25 passed, 1 warning
-ML focused tests: 14 passed, 1 warning
+Dashboard tests: 26 passed, 1 warning
+ML focused tests: 15 passed, 1 warning
 Core regression: 298 passed, 1 warning
 Dashboard validation tool: PASS
 apps/dashboard-ml forbidden-token scan: no matches

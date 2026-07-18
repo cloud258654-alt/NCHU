@@ -224,6 +224,6 @@ Canonical Gate 4.3 values:
 Validation:
 
 ```text
-Dashboard tests including ML baseline: 25 passed, 1 warning
+Dashboard tests including ML baseline: 26 passed, 1 warning
 Core regression: 298 passed, 1 warning
 ```

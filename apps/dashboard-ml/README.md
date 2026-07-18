@@ -115,8 +115,9 @@ Canonical Gate 4.3 contract values:
 
 Gate 4.3 keeps the persisted `risk_level` enum limited to `low`, `medium`, and `high`.
 Critical events are represented additively through `critical=true`,
-`critical_signals`, and `escalation_level=critical`; `critical_gte` is exposed as
-90 in `/api/ml/info`.
+`critical_signals`, and `escalation_level=critical`; non-critical escalation
+values are `none`, `review`, and `urgent`. `critical_gte` is exposed as 90 in
+`/api/ml/info`.
 
 `analysis_id` is deterministic and versioned as
 `rules-v{model_version_dash}-{sha256_32}` after canonical whitespace normalization.

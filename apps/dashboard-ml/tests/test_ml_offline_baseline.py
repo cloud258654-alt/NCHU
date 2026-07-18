@@ -62,7 +62,7 @@ def test_ml_info_disclaims_original_model_and_production_accuracy() -> None:
         "critical_gte": 90,
     }
     assert payload["risk_level_values"] == ["low", "medium", "high"]
-    assert payload["escalation_level_values"] == ["low", "medium", "high", "critical"]
+    assert payload["escalation_level_values"] == ["none", "review", "urgent", "critical"]
     assert payload["response_contract"]["response_suggestion_keys"] == ["en", "zh_tw"]
     assert payload["response_contract"]["analysis_id_format"] == "rules-v{model_version_dash}-{sha256_32}"
     assert "No trained-model accuracy is claimed." in payload["limitations"]
@@ -96,7 +96,7 @@ def test_analyze_review_returns_contract_and_deterministic_sentiment() -> None:
     assert payload["human_review_required"] is False
     assert payload["critical"] is False
     assert payload["critical_signals"] == []
-    assert payload["escalation_level"] == "low"
+    assert payload["escalation_level"] == "none"
     assert payload["contract_version"] == CONTRACT_VERSION
     assert payload["response_contract"]["version"] == CONTRACT_VERSION
     assert set(payload["response_suggestion"]) == {"en", "zh_tw"}
@@ -121,6 +121,7 @@ def test_analyze_review_flags_risk_terms_on_100_point_scale() -> None:
     assert payload["sentiment"] == "negative"
     assert payload["risk_score"] >= 33
     assert payload["risk_level"] in {"medium", "high"}
+    assert payload["escalation_level"] in {"review", "urgent", "critical"}
     assert payload["human_review_required"] is True
     assert "risk" in payload["categories"]
     assert "Escalate for manual review before responding." in payload["suggested_actions"]
@@ -252,6 +253,8 @@ def test_suggest_response_uses_deterministic_bilingual_template_not_llm() -> Non
     assert payload["response_contract"]["response_suggestion_keys"] == ["en", "zh_tw"]
     assert payload["response_suggestion"] == payload["suggested_response"]
     assert payload["human_review_required"] is True
+    assert payload["rationale"]["risk_level"] == "medium"
+    assert payload["rationale"]["escalation_level"] == "review"
     assert payload["rationale"]["method"] == "deterministic template selected from rules baseline"
     assert "Demo Shop" in payload["suggested_response"]["en"]
     assert "\u62b1\u6b49" in payload["suggested_response"]["zh_tw"]
@@ -347,6 +350,24 @@ def test_analyze_review_contract_contains_required_fields() -> None:
     assert payload["analysis_method"] == "rules_baseline"
     assert payload["analysis_type"] == ANALYSIS_TYPE
     assert payload["contract_version"] == CONTRACT_VERSION
+
+
+def test_suggest_response_accepts_mvp_escalation_terms() -> None:
+    response = _client().post(
+        "/api/ai/suggest-response",
+        json={
+            "business_name": "Demo Shop",
+            "review_text": "Customer reported a serious safety issue.",
+            "sentiment": "negative",
+            "risk_level": "urgent",
+        },
+    )
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["rationale"]["risk_level"] == "high"
+    assert payload["rationale"]["escalation_level"] == "urgent"
+    assert set(payload["suggested_response"]) == {"en", "zh_tw"}
 
 
 def test_no_fake_model_artifacts_are_created() -> None:

@@ -215,7 +215,7 @@ compileall: passed
 node --check: passed
 Dashboard independent pytest: 23 passed, 1 warning
 Dashboard Playwright Chromium acceptance: 5 passed
-ML offline baseline focused pytest: 14 passed, 1 warning
+ML offline baseline focused pytest: 15 passed, 1 warning
 Dashboard app validation passed
 apps/dashboard-ml forbidden-token scan: no matches
 ```
@@ -229,6 +229,7 @@ Gate 4.3 ML contract assertions:
 - `contract_version` is `gate-4.3`.
 - `risk_score` uses a 0-100 scale with low `< 33`, medium `< 66`, high `>= 66`, and `critical_gte=90`.
 - `risk_level` remains limited to `low`, `medium`, and `high`.
+- `escalation_level` remains limited to `none`, `review`, `urgent`, and `critical`.
 - Critical cases use `critical=true`, `critical_signals`, and `escalation_level=critical`.
 - `analysis_id` is deterministic and versioned as `rules-v{model_version_dash}-{sha256_32}`.
 - `/api/ml/analyze-review`, `/api/ml/analyze-batch`, and `/api/ai/suggest-response` include `response_contract` metadata.

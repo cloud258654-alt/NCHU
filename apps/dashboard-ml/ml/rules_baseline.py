@@ -220,7 +220,11 @@ def analyze_review(payload: ReviewAnalysisInput) -> dict[str, Any]:
     sentiment_label = _sentiment(sentiment_score)
     risk_level = _risk_level(risk_score)
     critical = bool(critical_hits)
-    escalation_level = "critical" if critical else risk_level
+    escalation_level = _escalation_level(
+        risk_level=risk_level,
+        critical=critical,
+        has_risk_signals=bool(risk_hits),
+    )
     response_suggestion = _analysis_response_suggestion(
         sentiment_label=sentiment_label,
         risk_level=risk_level,
@@ -314,8 +318,11 @@ def suggest_response(
     inferred = analyze_review(ReviewAnalysisInput(content=review_text))
     final_sentiment = (sentiment or inferred["sentiment_label"]).lower()
     requested_risk = (risk_level or inferred["risk_level"]).lower()
-    final_escalation = "critical" if requested_risk == "critical" or inferred["critical"] else requested_risk
-    final_risk = "high" if final_escalation == "critical" else requested_risk
+    final_escalation = _requested_escalation_level(
+        requested_risk=requested_risk,
+        inferred_critical=bool(inferred["critical"]),
+    )
+    final_risk = _risk_level_from_escalation(final_escalation)
     final_tone = (tone or "professional").lower()
     response = _suggest_response_templates(
         business_name=business_name or "our team",
@@ -380,7 +387,7 @@ def model_info() -> dict[str, Any]:
         "supported_languages": ["en", "zh-TW"],
         "risk_score_scale": {"min": 0, "max": 100, "low_lt": 33, "medium_lt": 66, "critical_gte": 90},
         "risk_level_values": ["low", "medium", "high"],
-        "escalation_level_values": ["low", "medium", "high", "critical"],
+        "escalation_level_values": ["none", "review", "urgent", "critical"],
         "endpoints": [
             "GET /api/ml/health",
             "GET /api/ml/info",
@@ -425,6 +432,34 @@ def _risk_level(score: float) -> str:
     if score >= 66:
         return "high"
     if score >= 33:
+        return "medium"
+    return "low"
+
+
+def _escalation_level(*, risk_level: str, critical: bool, has_risk_signals: bool) -> str:
+    if critical:
+        return "critical"
+    if risk_level == "high":
+        return "urgent"
+    if risk_level == "medium" or has_risk_signals:
+        return "review"
+    return "none"
+
+
+def _requested_escalation_level(*, requested_risk: str, inferred_critical: bool) -> str:
+    if inferred_critical or requested_risk == "critical":
+        return "critical"
+    if requested_risk in {"high", "urgent"}:
+        return "urgent"
+    if requested_risk in {"medium", "review"}:
+        return "review"
+    return "none"
+
+
+def _risk_level_from_escalation(escalation_level: str) -> str:
+    if escalation_level in {"critical", "urgent"}:
+        return "high"
+    if escalation_level == "review":
         return "medium"
     return "low"
 
@@ -584,6 +619,7 @@ def _response_contract() -> dict[str, Any]:
         "deterministic": True,
         "response_suggestion_keys": list(RESPONSE_LANGUAGE_KEYS),
         "risk_level_values": ["low", "medium", "high"],
+        "escalation_level_values": ["none", "review", "urgent", "critical"],
         "critical_field": "critical",
         "analysis_id_format": "rules-v{model_version_dash}-{sha256_32}",
     }
