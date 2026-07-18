@@ -92,28 +92,43 @@ Gate 4 adds a versioned deterministic baseline API:
 
 This baseline is not the original model, is not production-grade trained ML, and does not claim trained-model accuracy. Response suggestions use deterministic bilingual templates, not Ollama or another LLM.
 
-Canonical Gate 4.2 contract values:
+Canonical Gate 4.3 contract values:
 
 - `model_name`: `bi-rmp-rules-baseline`
-- `model_version`: `1.1.0`
+- `model_version`: `1.2.0`
 - `analysis_method`: `rules_baseline`
+- `analysis_type`: `review_risk_sentiment`
+- `contract_version`: `gate-4.3`
 
-`POST /api/ml/analyze-review` returns the Gate 4.2 contract fields:
+`POST /api/ml/analyze-review` returns the Gate 4.3 contract fields:
 
 - `review_id`, `business_id`, `platform`
 - `sentiment_label`, `sentiment_score`
 - `risk_score`, `risk_level`
 - `topics`, `tags`, `response_suggestion`
-- `model_name`, `model_version`, `analysis_method`
+- `model_name`, `model_version`, `analysis_method`, `analysis_type`
 - `analysis_id`, `analyzed_at`
-- `human_review_required`, `limitations`
+- `human_review_required`, `critical`, `critical_signals`, `escalation_level`
+- `contract_version`, `response_contract`, `limitations`
 
 `risk_score` uses a 0-100 scale. Values below 33 are `low`, values from 33 to below 66 are `medium`, and values from 66 upward are `high`.
+
+Gate 4.3 keeps the persisted `risk_level` enum limited to `low`, `medium`, and `high`.
+Critical events are represented additively through `critical=true`,
+`critical_signals`, and `escalation_level=critical`; `critical_gte` is exposed as
+90 in `/api/ml/info`.
+
+`analysis_id` is deterministic and versioned as
+`rules-v{model_version_dash}-{sha256_32}` after canonical whitespace normalization.
 
 `response_suggestion` and `POST /api/ai/suggest-response` return deterministic bilingual response text:
 
 - `en`
 - `zh_tw`
+
+`POST /api/ai/suggest-response` also returns `analysis_id`, `response_id`,
+`contract_version`, `response_contract`, and a `response_suggestion` alias for
+the canonical bilingual response object.
 
 Traditional Chinese support is deterministic phrase matching for baseline service, quality, price, sentiment, and risk signals. It is not a trained multilingual model.
 

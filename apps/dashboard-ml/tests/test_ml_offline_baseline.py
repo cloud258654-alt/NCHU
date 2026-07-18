@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -12,7 +13,9 @@ sys.path.insert(0, str(APP_ROOT))
 from backend.app import app  # noqa: E402
 from ml.rules_baseline import (  # noqa: E402
     ANALYSIS_METHOD,
+    ANALYSIS_TYPE,
     BASELINE_VERSION,
+    CONTRACT_VERSION,
     MODEL_KIND,
     MODEL_NAME,
     ReviewAnalysisInput,
@@ -42,14 +45,26 @@ def test_ml_info_disclaims_original_model_and_production_accuracy() -> None:
 
     assert response.status_code == 200
     assert payload["model_name"] == "bi-rmp-rules-baseline"
-    assert payload["model_version"] == "1.1.0"
+    assert payload["model_version"] == BASELINE_VERSION
     assert payload["analysis_method"] == "rules_baseline"
+    assert payload["analysis_type"] == ANALYSIS_TYPE
+    assert payload["contract_version"] == CONTRACT_VERSION
     assert payload["original_model_restored"] is False
     assert payload["production_grade_ml"] is False
     assert payload["uses_pickle_or_joblib"] is False
     assert payload["uses_ollama_or_llm"] is False
     assert payload["supported_languages"] == ["en", "zh-TW"]
-    assert payload["risk_score_scale"] == {"min": 0, "max": 100, "low_lt": 33, "medium_lt": 66}
+    assert payload["risk_score_scale"] == {
+        "min": 0,
+        "max": 100,
+        "low_lt": 33,
+        "medium_lt": 66,
+        "critical_gte": 90,
+    }
+    assert payload["risk_level_values"] == ["low", "medium", "high"]
+    assert payload["escalation_level_values"] == ["low", "medium", "high", "critical"]
+    assert payload["response_contract"]["response_suggestion_keys"] == ["en", "zh_tw"]
+    assert payload["response_contract"]["analysis_id_format"] == "rules-v{model_version_dash}-{sha256_32}"
     assert "No trained-model accuracy is claimed." in payload["limitations"]
 
 
@@ -75,9 +90,15 @@ def test_analyze_review_returns_contract_and_deterministic_sentiment() -> None:
     assert payload["model_name"] == MODEL_NAME
     assert payload["model_version"] == BASELINE_VERSION
     assert payload["analysis_method"] == ANALYSIS_METHOD
-    assert payload["analysis_id"].startswith("rules-")
+    assert payload["analysis_type"] == ANALYSIS_TYPE
+    assert re.fullmatch(r"rules-v1-2-0-[0-9a-f]{32}", payload["analysis_id"])
     assert payload["analyzed_at"].endswith("Z")
     assert payload["human_review_required"] is False
+    assert payload["critical"] is False
+    assert payload["critical_signals"] == []
+    assert payload["escalation_level"] == "low"
+    assert payload["contract_version"] == CONTRACT_VERSION
+    assert payload["response_contract"]["version"] == CONTRACT_VERSION
     assert set(payload["response_suggestion"]) == {"en", "zh_tw"}
     assert payload["trained_model_available"] is False
     assert payload["model_kind"] == MODEL_KIND
@@ -145,9 +166,34 @@ def test_analyze_review_supports_traditional_chinese_risk() -> None:
     assert payload["risk_score"] >= 66
     assert payload["risk_level"] == "high"
     assert payload["human_review_required"] is True
+    assert payload["critical"] is True
+    assert payload["escalation_level"] == "critical"
+    assert "\u98df\u7269\u4e2d\u6bd2" in payload["critical_signals"]
     assert "risk" in payload["topics"]
     assert "\u98df\u7269\u4e2d\u6bd2" in payload["tags"]
     assert "\u4eba\u5de5\u5be9\u67e5" in payload["response_suggestion"]["zh_tw"]
+
+
+def test_analyze_review_flags_critical_signals_without_expanding_risk_level_enum() -> None:
+    response = _client().post(
+        "/api/ml/analyze-review",
+        json={
+            "review_id": "critical-1",
+            "business_id": "b-critical",
+            "platform": "google_maps",
+            "content": "This unsafe incident caused an injury and we may contact police and media.",
+        },
+    )
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["risk_score"] >= 90
+    assert payload["risk_level"] == "high"
+    assert payload["critical"] is True
+    assert payload["critical_signals"] == ["injury", "media", "police", "unsafe"]
+    assert payload["escalation_level"] == "critical"
+    assert payload["human_review_required"] is True
+    assert set(payload["response_suggestion"]) == {"en", "zh_tw"}
 
 
 def test_analyze_batch_returns_items_and_aggregate() -> None:
@@ -170,7 +216,10 @@ def test_analyze_batch_returns_items_and_aggregate() -> None:
     assert payload["model_name"] == MODEL_NAME
     assert payload["model_version"] == BASELINE_VERSION
     assert payload["analysis_method"] == ANALYSIS_METHOD
+    assert payload["analysis_type"] == ANALYSIS_TYPE
+    assert payload["contract_version"] == CONTRACT_VERSION
     assert all("sentiment_label" in item for item in payload["items"])
+    assert all(item["response_contract"]["version"] == CONTRACT_VERSION for item in payload["items"])
 
 
 def test_analyze_batch_rejects_empty_batch() -> None:
@@ -195,7 +244,14 @@ def test_suggest_response_uses_deterministic_bilingual_template_not_llm() -> Non
     assert payload["model_name"] == MODEL_NAME
     assert payload["model_version"] == BASELINE_VERSION
     assert payload["analysis_method"] == ANALYSIS_METHOD
+    assert payload["analysis_type"] == ANALYSIS_TYPE
+    assert re.fullmatch(r"rules-v1-2-0-[0-9a-f]{32}", payload["analysis_id"])
+    assert re.fullmatch(r"response-[0-9a-f]{24}", payload["response_id"])
+    assert payload["contract_version"] == CONTRACT_VERSION
     assert payload["trained_model_available"] is False
+    assert payload["response_contract"]["response_suggestion_keys"] == ["en", "zh_tw"]
+    assert payload["response_suggestion"] == payload["suggested_response"]
+    assert payload["human_review_required"] is True
     assert payload["rationale"]["method"] == "deterministic template selected from rules baseline"
     assert "Demo Shop" in payload["suggested_response"]["en"]
     assert "\u62b1\u6b49" in payload["suggested_response"]["zh_tw"]
@@ -213,6 +269,43 @@ def test_rules_baseline_is_deterministic_except_analyzed_at() -> None:
     assert first["risk_level"] == second["risk_level"]
     assert first["risk_score"] == second["risk_score"]
     assert first["topics"] == second["topics"]
+
+
+def test_analysis_id_uses_canonical_whitespace_and_versioned_format() -> None:
+    first = analyze_review(
+        ReviewAnalysisInput(
+            review_id="stable-1",
+            business_id="b-1",
+            platform="ptt",
+            language="en",
+            title="Slow service",
+            content="The   wait\nwas\ttoo long.",
+        )
+    )
+    second = analyze_review(
+        ReviewAnalysisInput(
+            review_id="stable-1",
+            business_id="b-1",
+            platform="ptt",
+            language="en",
+            title="Slow service",
+            content="The wait was too long.",
+        )
+    )
+    different_review = analyze_review(
+        ReviewAnalysisInput(
+            review_id="stable-2",
+            business_id="b-1",
+            platform="ptt",
+            language="en",
+            title="Slow service",
+            content="The wait was too long.",
+        )
+    )
+
+    assert first["analysis_id"] == second["analysis_id"]
+    assert first["analysis_id"] != different_review["analysis_id"]
+    assert re.fullmatch(r"rules-v1-2-0-[0-9a-f]{32}", first["analysis_id"])
 
 
 def test_analyze_review_contract_contains_required_fields() -> None:
@@ -235,17 +328,25 @@ def test_analyze_review_contract_contains_required_fields() -> None:
         "model_name",
         "model_version",
         "analysis_method",
+        "analysis_type",
         "analysis_id",
         "analyzed_at",
         "human_review_required",
+        "critical",
+        "critical_signals",
+        "escalation_level",
+        "contract_version",
+        "response_contract",
         "limitations",
     }
 
     assert response.status_code == 200
     assert required.issubset(payload)
     assert payload["model_name"] == "bi-rmp-rules-baseline"
-    assert payload["model_version"] == "1.1.0"
+    assert payload["model_version"] == BASELINE_VERSION
     assert payload["analysis_method"] == "rules_baseline"
+    assert payload["analysis_type"] == ANALYSIS_TYPE
+    assert payload["contract_version"] == CONTRACT_VERSION
 
 
 def test_no_fake_model_artifacts_are_created() -> None:

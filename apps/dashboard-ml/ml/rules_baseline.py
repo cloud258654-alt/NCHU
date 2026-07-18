@@ -10,9 +10,12 @@ from ml.safe_text_features import summarize_text_features
 
 
 MODEL_NAME = "bi-rmp-rules-baseline"
-BASELINE_VERSION = "1.1.0"
+BASELINE_VERSION = "1.2.0"
 MODEL_KIND = "deterministic_rules_baseline"
 ANALYSIS_METHOD = "rules_baseline"
+ANALYSIS_TYPE = "review_risk_sentiment"
+CONTRACT_VERSION = "gate-4.3"
+RESPONSE_LANGUAGE_KEYS = ("en", "zh_tw")
 
 POSITIVE_TERMS = frozenset(
     {
@@ -69,6 +72,24 @@ RISK_TERMS = frozenset(
         "unsafe",
     }
 )
+CRITICAL_TERMS = frozenset(
+    {
+        "allergy",
+        "danger",
+        "discrimination",
+        "hospital",
+        "illegal",
+        "injury",
+        "lawsuit",
+        "media",
+        "police",
+        "poisoning",
+        "sick",
+        "threat",
+        "unsafe",
+        "violence",
+    }
+)
 SERVICE_TERMS = frozenset({"rude", "friendly", "helpful", "polite", "professional", "slow", "wait"})
 PRICE_TERMS = frozenset({"cheap", "expensive", "overpriced", "price", "refund"})
 QUALITY_TERMS = frozenset({"broken", "clean", "dirty", "fresh", "good", "poor", "quality", "terrible"})
@@ -120,6 +141,23 @@ ZH_RISK_TERMS = frozenset(
         "\u4e0d\u5b89\u5168",
     }
 )
+ZH_CRITICAL_TERMS = frozenset(
+    {
+        "\u98df\u7269\u4e2d\u6bd2",
+        "\u904e\u654f",
+        "\u9001\u91ab",
+        "\u4f4f\u9662",
+        "\u53d7\u50b7",
+        "\u5371\u96aa",
+        "\u6b67\u8996",
+        "\u9055\u6cd5",
+        "\u63d0\u544a",
+        "\u5831\u8b66",
+        "\u5a92\u9ad4",
+        "\u5a01\u8105",
+        "\u4e0d\u5b89\u5168",
+    }
+)
 ZH_SERVICE_TERMS = frozenset(
     {
         "\u670d\u52d9",
@@ -165,24 +203,30 @@ class ReviewAnalysisInput:
 
 
 def analyze_review(payload: ReviewAnalysisInput) -> dict[str, Any]:
-    text = " ".join(part for part in (payload.title, payload.content) if part).strip()
+    text = _analysis_text(payload)
     tokens = _tokens(text)
     positive_hits = _hits(tokens, POSITIVE_TERMS) | _phrase_hits(text, ZH_POSITIVE_TERMS)
     negative_hits = _hits(tokens, NEGATIVE_TERMS) | _phrase_hits(text, ZH_NEGATIVE_TERMS)
-    risk_hits = _hits(tokens, RISK_TERMS) | _phrase_hits(text, ZH_RISK_TERMS)
+    critical_hits = _hits(tokens, CRITICAL_TERMS) | _phrase_hits(text, ZH_CRITICAL_TERMS)
+    risk_hits = _hits(tokens, RISK_TERMS) | _phrase_hits(text, ZH_RISK_TERMS) | critical_hits
 
     sentiment_score = _clamp_ratio((len(positive_hits) - len(negative_hits)) / 5)
     risk_ratio = _clamp_ratio(len(risk_hits) / 3 + max(len(negative_hits) - len(positive_hits), 0) / 8)
     risk_score = round(risk_ratio * 100, 1)
+    if critical_hits:
+        risk_score = max(risk_score, 90.0)
     topics = _topics(tokens, text)
     features = summarize_text_features(text)
     sentiment_label = _sentiment(sentiment_score)
     risk_level = _risk_level(risk_score)
+    critical = bool(critical_hits)
+    escalation_level = "critical" if critical else risk_level
     response_suggestion = _analysis_response_suggestion(
         sentiment_label=sentiment_label,
         risk_level=risk_level,
+        critical=critical,
     )
-    human_review_required = risk_level == "high" or bool(risk_hits)
+    human_review_required = risk_level == "high" or critical or bool(risk_hits)
     limitations = [
         "This is a deterministic rules baseline, not a recovered original model.",
         "This is not a production-grade trained machine learning model.",
@@ -204,9 +248,15 @@ def analyze_review(payload: ReviewAnalysisInput) -> dict[str, Any]:
         "model_name": MODEL_NAME,
         "model_version": BASELINE_VERSION,
         "analysis_method": ANALYSIS_METHOD,
+        "analysis_type": ANALYSIS_TYPE,
         "analysis_id": _analysis_id(payload, text),
         "analyzed_at": _analyzed_at(),
         "human_review_required": human_review_required,
+        "critical": critical,
+        "critical_signals": sorted(critical_hits),
+        "escalation_level": escalation_level,
+        "contract_version": CONTRACT_VERSION,
+        "response_contract": _response_contract(),
         "limitations": limitations,
         # Backward-compatible fields retained for Gate 4 clients.
         "model_kind": MODEL_KIND,
@@ -219,6 +269,7 @@ def analyze_review(payload: ReviewAnalysisInput) -> dict[str, Any]:
             "positive": sorted(positive_hits),
             "negative": sorted(negative_hits),
             "risk": sorted(risk_hits),
+            "critical": sorted(critical_hits),
         },
         "summary": _summary(sentiment_score, risk_score),
         "suggested_actions": _suggested_actions(sentiment_score, risk_score, topics),
@@ -237,6 +288,9 @@ def analyze_batch(items: list[ReviewAnalysisInput]) -> dict[str, Any]:
         "model_name": MODEL_NAME,
         "model_version": BASELINE_VERSION,
         "analysis_method": ANALYSIS_METHOD,
+        "analysis_type": ANALYSIS_TYPE,
+        "contract_version": CONTRACT_VERSION,
+        "response_contract": _response_contract(),
         "model_kind": MODEL_KIND,
         "baseline_version": BASELINE_VERSION,
         "trained_model_available": False,
@@ -259,26 +313,44 @@ def suggest_response(
 ) -> dict[str, Any]:
     inferred = analyze_review(ReviewAnalysisInput(content=review_text))
     final_sentiment = (sentiment or inferred["sentiment_label"]).lower()
-    final_risk = (risk_level or inferred["risk_level"]).lower()
+    requested_risk = (risk_level or inferred["risk_level"]).lower()
+    final_escalation = "critical" if requested_risk == "critical" or inferred["critical"] else requested_risk
+    final_risk = "high" if final_escalation == "critical" else requested_risk
     final_tone = (tone or "professional").lower()
     response = _suggest_response_templates(
         business_name=business_name or "our team",
         sentiment_label=final_sentiment,
         risk_level=final_risk,
+        critical=final_escalation == "critical",
     )
 
     return {
         "model_name": MODEL_NAME,
         "model_version": BASELINE_VERSION,
         "analysis_method": ANALYSIS_METHOD,
+        "analysis_type": ANALYSIS_TYPE,
+        "analysis_id": inferred["analysis_id"],
+        "response_id": _response_id(
+            review_text=review_text,
+            business_name=business_name,
+            sentiment=final_sentiment,
+            risk_level=final_risk,
+            escalation_level=final_escalation,
+            tone=final_tone,
+        ),
+        "contract_version": CONTRACT_VERSION,
+        "response_contract": _response_contract(),
         "model_kind": MODEL_KIND,
         "baseline_version": BASELINE_VERSION,
         "trained_model_available": False,
         "tone": final_tone,
         "suggested_response": response,
+        "response_suggestion": response,
+        "human_review_required": True,
         "rationale": {
             "sentiment": final_sentiment,
             "risk_level": final_risk,
+            "escalation_level": final_escalation,
             "method": "deterministic template selected from rules baseline",
         },
         "limitations": [
@@ -294,6 +366,9 @@ def model_info() -> dict[str, Any]:
         "model_name": MODEL_NAME,
         "model_version": BASELINE_VERSION,
         "analysis_method": ANALYSIS_METHOD,
+        "analysis_type": ANALYSIS_TYPE,
+        "contract_version": CONTRACT_VERSION,
+        "response_contract": _response_contract(),
         "model_kind": MODEL_KIND,
         "baseline_version": BASELINE_VERSION,
         "trained_model_available": False,
@@ -303,7 +378,9 @@ def model_info() -> dict[str, Any]:
         "uses_ollama_or_llm": False,
         "description": "Offline deterministic rules baseline for versioned analysis API development.",
         "supported_languages": ["en", "zh-TW"],
-        "risk_score_scale": {"min": 0, "max": 100, "low_lt": 33, "medium_lt": 66},
+        "risk_score_scale": {"min": 0, "max": 100, "low_lt": 33, "medium_lt": 66, "critical_gte": 90},
+        "risk_level_values": ["low", "medium", "high"],
+        "escalation_level_values": ["low", "medium", "high", "critical"],
         "endpoints": [
             "GET /api/ml/health",
             "GET /api/ml/info",
@@ -360,7 +437,11 @@ def _topics(tokens: set[str], text: str) -> list[str]:
         topics.append("price")
     if tokens.intersection(QUALITY_TERMS) or _phrase_hits(text, ZH_QUALITY_TERMS):
         topics.append("quality")
-    if tokens.intersection(RISK_TERMS) or _phrase_hits(text, ZH_RISK_TERMS):
+    if (
+        tokens.intersection(RISK_TERMS | CRITICAL_TERMS)
+        or _phrase_hits(text, ZH_RISK_TERMS)
+        or _phrase_hits(text, ZH_CRITICAL_TERMS)
+    ):
         topics.append("risk")
     return topics or ["general"]
 
@@ -380,15 +461,34 @@ def _summary(sentiment_score: float, risk_score: float) -> str:
     return f"Rules baseline classified the review as {sentiment} sentiment with {risk} risk."
 
 
-def _analysis_response_suggestion(*, sentiment_label: str, risk_level: str) -> dict[str, str]:
+def _analysis_response_suggestion(*, sentiment_label: str, risk_level: str, critical: bool) -> dict[str, str]:
     return _suggest_response_templates(
         business_name="the business",
         sentiment_label=sentiment_label,
         risk_level=risk_level,
+        critical=critical,
     )
 
 
-def _suggest_response_templates(*, business_name: str, sentiment_label: str, risk_level: str) -> dict[str, str]:
+def _suggest_response_templates(
+    *,
+    business_name: str,
+    sentiment_label: str,
+    risk_level: str,
+    critical: bool = False,
+) -> dict[str, str]:
+    if critical:
+        return {
+            "en": (
+                f"Thank you for telling {business_name} about this serious issue. We will pause any public response "
+                "until a responsible team member reviews the facts and contacts you directly for follow-up."
+            ),
+            "zh_tw": (
+                "\u611f\u8b1d\u60a8\u544a\u77e5\u9019\u500b\u91cd\u5927\u554f\u984c\u3002"
+                "\u6211\u5011\u6703\u5148\u9032\u884c\u4eba\u5de5\u5be9\u67e5\u8207\u4e8b\u5be6\u78ba\u8a8d\uff0c"
+                "\u518d\u7531\u8ca0\u8cac\u4eba\u54e1\u8207\u60a8\u806f\u7e6b\u5f8c\u7e8c\u8655\u7406\u3002"
+            ),
+        }
     if risk_level == "high":
         return {
             "en": (
@@ -433,15 +533,60 @@ def _suggest_response_templates(*, business_name: str, sentiment_label: str, ris
 def _analysis_id(payload: ReviewAnalysisInput, text: str) -> str:
     raw = "|".join(
         [
+            CONTRACT_VERSION,
             BASELINE_VERSION,
             payload.review_id or "",
             payload.business_id or "",
             payload.platform or "",
             payload.language or "",
-            text,
+            _canonicalize_text(text),
         ]
     )
-    return "rules-" + sha256(raw.encode("utf-8")).hexdigest()[:24]
+    version = BASELINE_VERSION.replace(".", "-")
+    return f"rules-v{version}-" + sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+
+def _response_id(
+    *,
+    review_text: str,
+    business_name: str | None,
+    sentiment: str,
+    risk_level: str,
+    escalation_level: str,
+    tone: str,
+) -> str:
+    raw = "|".join(
+        [
+            CONTRACT_VERSION,
+            BASELINE_VERSION,
+            _canonicalize_text(review_text),
+            business_name or "",
+            sentiment,
+            risk_level,
+            escalation_level,
+            tone,
+        ]
+    )
+    return "response-" + sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def _analysis_text(payload: ReviewAnalysisInput) -> str:
+    return _canonicalize_text(" ".join(part for part in (payload.title, payload.content) if part))
+
+
+def _canonicalize_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _response_contract() -> dict[str, Any]:
+    return {
+        "version": CONTRACT_VERSION,
+        "deterministic": True,
+        "response_suggestion_keys": list(RESPONSE_LANGUAGE_KEYS),
+        "risk_level_values": ["low", "medium", "high"],
+        "critical_field": "critical",
+        "analysis_id_format": "rules-v{model_version_dash}-{sha256_32}",
+    }
 
 
 def _analyzed_at() -> str:

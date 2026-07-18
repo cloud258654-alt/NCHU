@@ -36,7 +36,7 @@ Dashboard frontend under `apps/dashboard-ml/frontend`:
 
 ## ML Status
 
-Gate 4 adds an offline deterministic rules baseline under `apps/dashboard-ml/ml`. Gate 4.2 fixes the canonical contract values to `model_name=bi-rmp-rules-baseline`, `model_version=1.1.0`, and `analysis_method=rules_baseline`, uses a 0-100 risk score, and returns deterministic bilingual response templates. This is not the original restored model, not production-grade trained machine learning, and no trained-model accuracy is claimed. No pickle or joblib model is loaded or created.
+Gate 4 adds an offline deterministic rules baseline under `apps/dashboard-ml/ml`. Gate 4.3 fixes the canonical contract values to `model_name=bi-rmp-rules-baseline`, `model_version=1.2.0`, `analysis_method=rules_baseline`, `analysis_type=review_risk_sentiment`, and `contract_version=gate-4.3`, uses a 0-100 risk score, and returns deterministic bilingual response templates. `risk_level` remains limited to `low`, `medium`, and `high`; critical cases are represented additively through `critical=true`, `critical_signals`, and `escalation_level=critical`. This is not the original restored model, not production-grade trained machine learning, and no trained-model accuracy is claimed. No pickle or joblib model is loaded or created.
 
 ## Validation Results
 
@@ -55,7 +55,7 @@ node --check apps/dashboard-ml/frontend/app.js: PASS
 Dashboard independent tests:
 
 ```text
-23 passed, 1 warning
+25 passed, 1 warning
 ```
 
 Core regression:

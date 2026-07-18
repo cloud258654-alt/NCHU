@@ -54,7 +54,7 @@ Status values:
 | 11 | Frontend Core API integration | IMPLEMENTED_AND_TESTED | `/api/config` serves `BI_RMP_CORE_API_URL`; frontend behavior tests and Playwright browser tests verify Core API calls. | Requires staging Core API URL at runtime for live validation. |
 | 12 | Direct Supabase access removal | IMPLEMENTED_AND_TESTED | Forbidden-token scan against `apps/dashboard-ml` returned no matches; Playwright browser request log verifies no direct Supabase calls. | Future frontend changes must keep the scan passing. |
 | 13 | ML health/info API | IMPLEMENTED_AND_TESTED | `GET /api/ml/health` and `GET /api/ml/info` tests pass and explicitly disclaim original model restoration. | Not a production trained ML model. |
-| 14 | ML review analysis | IMPLEMENTED_AND_TESTED | `POST /api/ml/analyze-review` Gate 4.2 canonical values, 0-100 risk scale, Traditional Chinese cases, deterministic analysis, and batch tests pass. | Phrase rules only; no trained accuracy is claimed. |
+| 14 | ML review analysis | IMPLEMENTED_AND_TESTED | `POST /api/ml/analyze-review` Gate 4.3 canonical values, 0-100 risk scale, critical escalation, deterministic analysis IDs, response contract metadata, Traditional Chinese cases, deterministic analysis, and batch tests pass. | Phrase rules only; no trained accuracy is claimed. |
 | 15 | AI response suggestion | IMPLEMENTED_AND_TESTED | `POST /api/ai/suggest-response` deterministic bilingual template test passes with `en` and `zh_tw` response keys. | No Ollama or LLM integration in this phase. |
 
 ## Current Acceptance Conclusion
@@ -63,7 +63,7 @@ Status values:
 Core backend: accepted at automated-test level
 Dashboard backend API: accepted at automated-test level
 Dashboard frontend: accepted at static, syntax, independent behavior-test, local smoke-test, and Playwright Chromium fake-Core level
-ML AI offline baseline: accepted at deterministic rules-test level with Gate 4.2 contract, 0-100 risk scale, bilingual response templates, and Traditional Chinese phrase coverage
+ML AI offline baseline: accepted at deterministic rules-test level with Gate 4.3 contract, 0-100 risk scale, additive critical escalation fields, deterministic analysis IDs, response contract metadata, bilingual response templates, and Traditional Chinese phrase coverage
 Staging database behavior: not accepted live, intentionally not connected
 Deployment readiness: not accepted, deployment not in scope
 ```
