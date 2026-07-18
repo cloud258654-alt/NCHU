@@ -174,3 +174,40 @@ Provide one of the following before rerunning Phase 3:
 - Provide a branch or commit containing `apps/dashboard-ml`.
 
 Until one of those sources is available, Phase 3 cannot satisfy the restore/import PASS criteria without inventing application contents.
+
+## Rebuild Update
+
+Date: 2026-07-18
+Branch: `integration/bi-rmp-v2-staging-v2`
+
+After the restore/import failure above, the project decision changed from restoring the original Dashboard to rebuilding a new Dashboard application.
+
+This update does not invalidate the original restore finding: no trusted original `apps/dashboard-ml` source was found. The new application under `apps/dashboard-ml` is a rebuild on top of the Core Dashboard read API, not a recovered source tree and not a claim of exact UI parity with the original Dashboard.
+
+Rebuilt responsibilities:
+
+- `apps/dashboard-ml/backend`: health, config, Dashboard page, and static asset serving only.
+- `apps/dashboard-ml/frontend`: read-only UI that calls the Core API via runtime config.
+- `apps/dashboard-ml/ml`: no inference implementation; only safe deterministic helper code.
+
+Still not performed:
+
+- Supabase init/link/query
+- Migration dry-run or db push
+- Live crawler run
+- n8n startup
+- LINE live test
+- Staging or production deployment
+- ML pickle/joblib load or inference
+
+Validation summary:
+
+```text
+Dashboard compile: PASS
+Dashboard JavaScript syntax: PASS
+Dashboard independent tests: 11 passed, 1 warning
+Core regression: 298 passed, 1 warning
+Dashboard smoke: /api/health 200, /api/config 200, /dashboard 200
+Security scan under apps/dashboard-ml: no forbidden Supabase or secret token matches
+Gate 3 Playwright Chromium browser acceptance: 5 passed
+```

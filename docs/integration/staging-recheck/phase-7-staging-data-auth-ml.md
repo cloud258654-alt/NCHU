@@ -186,3 +186,44 @@ Blocking failures:
 ## Required Follow-Up
 
 Resolve Phase 3, Phase 5, and Phase 6 blockers. After Phase 6 passes and the linked project ref is confirmed as `qlhykeeyjaoikczoambe`, rerun Phase 7 with explicit approval before applying migration or inserting staging test data.
+
+## Gate 4 Local ML AI Baseline Update
+
+Date: 2026-07-18
+Branch: `integration/bi-rmp-v2-staging-v2`
+
+Gate 4 adds a local offline analysis baseline under `apps/dashboard-ml`.
+
+This update does not change the Phase 7 staging result above. No Supabase connection was made, no staging data was inserted, and no ML writeback/idempotency validation against `analysis_results` was performed.
+
+Implemented locally:
+
+- `GET /api/ml/health`
+- `GET /api/ml/info`
+- `POST /api/ml/analyze-review`
+- `POST /api/ml/analyze-batch`
+- `POST /api/ai/suggest-response`
+
+Scope limits:
+
+- Not the original recovered model.
+- Not production-grade trained ML.
+- No trained-model accuracy is claimed.
+- No fake pickle/joblib artifacts were created.
+- Ollama and other LLM integrations are deferred.
+- Gate 4.3 adds canonical analysis contract values, a 0-100 risk scale, additive critical escalation fields, deterministic analysis IDs, response contract metadata, deterministic bilingual response templates, and Traditional Chinese phrase support, still as deterministic rules only.
+
+Canonical Gate 4.3 values:
+
+- `model_name`: `bi-rmp-rules-baseline`
+- `model_version`: `1.2.0`
+- `analysis_method`: `rules_baseline`
+- `analysis_type`: `review_risk_sentiment`
+- `contract_version`: `gate-4.3`
+
+Validation:
+
+```text
+Dashboard tests including ML baseline: 26 passed, 1 warning
+Core regression: 298 passed, 1 warning
+```
