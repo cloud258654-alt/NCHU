@@ -32,7 +32,7 @@ POST /api/ai/suggest-response
 - Ollama and other LLM integrations are deferred.
 - The response suggestion endpoint uses deterministic templates only.
 
-## Gate 4.1 API Contract Update
+## Gate 4.2 API Contract Update
 
 `POST /api/ml/analyze-review` now returns the required contract fields:
 
@@ -43,6 +43,20 @@ POST /api/ai/suggest-response
 - `model_name`, `model_version`, `analysis_method`
 - `analysis_id`, `analyzed_at`
 - `human_review_required`, `limitations`
+
+Canonical values:
+
+- `model_name`: `bi-rmp-rules-baseline`
+- `model_version`: `1.1.0`
+- `analysis_method`: `rules_baseline`
+
+`risk_score` uses a 0-100 scale:
+
+- `< 33`: `low`
+- `>= 33` and `< 66`: `medium`
+- `>= 66`: `high`
+
+`response_suggestion` and `POST /api/ai/suggest-response` return deterministic bilingual templates with `en` and `zh_tw` keys.
 
 Traditional Chinese support was added through deterministic phrase matching for service, quality, price, sentiment, and risk signals. This remains a rules baseline and is not a trained multilingual model.
 
@@ -60,12 +74,12 @@ JavaScript syntax: PASS
 
 - ML health identifies the offline rules baseline.
 - ML info disclaims original model restoration and production ML quality.
-- Single review analysis returns the Gate 4.1 contract fields plus backward-compatible Gate 4 fields.
+- Single review analysis returns the Gate 4.2 contract fields plus backward-compatible Gate 4 fields.
 - Traditional Chinese positive service/quality text is classified by deterministic phrase rules.
 - Traditional Chinese risk complaint text requires human review.
 - Batch analysis returns item-level output and aggregate sentiment/risk counts.
 - Empty batch is rejected.
-- AI response suggestion returns deterministic templates and requires human review.
+- AI response suggestion returns deterministic bilingual templates and requires human review.
 - Repeated analysis of the same input is deterministic.
 - No `.pkl`, `.pickle`, or `.joblib` model artifacts were created.
 

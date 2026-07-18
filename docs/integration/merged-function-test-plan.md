@@ -220,6 +220,15 @@ Dashboard app validation passed
 apps/dashboard-ml forbidden-token scan: no matches
 ```
 
+Gate 4.2 ML contract assertions:
+
+- `model_name` is `bi-rmp-rules-baseline`.
+- `model_version` is `1.1.0`.
+- `analysis_method` is `rules_baseline`.
+- `risk_score` uses a 0-100 scale with low `< 33`, medium `< 66`, and high `>= 66`.
+- `response_suggestion` and `/api/ai/suggest-response` return `en` and `zh_tw` keys.
+- Traditional Chinese examples are sent as UTF-8 JSON and matched with deterministic phrase rules.
+
 Current local HTTP smoke commands:
 
 ```powershell

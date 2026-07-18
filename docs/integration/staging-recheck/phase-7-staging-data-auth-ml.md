@@ -211,7 +211,13 @@ Scope limits:
 - No trained-model accuracy is claimed.
 - No fake pickle/joblib artifacts were created.
 - Ollama and other LLM integrations are deferred.
-- Gate 4.1 adds required analysis contract fields and Traditional Chinese phrase support, still as deterministic rules only.
+- Gate 4.2 adds canonical analysis contract values, a 0-100 risk scale, deterministic bilingual response templates, and Traditional Chinese phrase support, still as deterministic rules only.
+
+Canonical Gate 4.2 values:
+
+- `model_name`: `bi-rmp-rules-baseline`
+- `model_version`: `1.1.0`
+- `analysis_method`: `rules_baseline`
 
 Validation:
 

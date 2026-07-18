@@ -90,9 +90,15 @@ Gate 4 adds a versioned deterministic baseline API:
 - `POST /api/ml/analyze-batch`
 - `POST /api/ai/suggest-response`
 
-This baseline is not the original model, is not production-grade trained ML, and does not claim trained-model accuracy. Response suggestions use deterministic templates, not Ollama or another LLM.
+This baseline is not the original model, is not production-grade trained ML, and does not claim trained-model accuracy. Response suggestions use deterministic bilingual templates, not Ollama or another LLM.
 
-`POST /api/ml/analyze-review` returns the Gate 4.1 contract fields:
+Canonical Gate 4.2 contract values:
+
+- `model_name`: `bi-rmp-rules-baseline`
+- `model_version`: `1.1.0`
+- `analysis_method`: `rules_baseline`
+
+`POST /api/ml/analyze-review` returns the Gate 4.2 contract fields:
 
 - `review_id`, `business_id`, `platform`
 - `sentiment_label`, `sentiment_score`
@@ -102,7 +108,14 @@ This baseline is not the original model, is not production-grade trained ML, and
 - `analysis_id`, `analyzed_at`
 - `human_review_required`, `limitations`
 
-Traditional Chinese support is deterministic phrase matching for baseline service, quality, price, and risk signals. It is not a trained multilingual model.
+`risk_score` uses a 0-100 scale. Values below 33 are `low`, values from 33 to below 66 are `medium`, and values from 66 upward are `high`.
+
+`response_suggestion` and `POST /api/ai/suggest-response` return deterministic bilingual response text:
+
+- `en`
+- `zh_tw`
+
+Traditional Chinese support is deterministic phrase matching for baseline service, quality, price, sentiment, and risk signals. It is not a trained multilingual model.
 
 ## Core API Contract
 

@@ -64,3 +64,13 @@ UTF-8 JSON smoke: contract fields present, Traditional Chinese positive case cla
 ## Encoding Note
 
 One manual PowerShell smoke request did not transmit Traditional Chinese text as usable UTF-8 in this terminal session. The same endpoint passed with Python standard-library UTF-8 JSON and with pytest. API clients should send JSON as UTF-8, preferably with `Content-Type: application/json; charset=utf-8`.
+
+## Gate 4.2 Superseding Note
+
+Gate 4.2 supersedes the canonical contract values recorded in this Gate 4.1 report:
+
+- `model_name`: `bi-rmp-rules-baseline`
+- `model_version`: `1.1.0`
+- `analysis_method`: `rules_baseline`
+
+Gate 4.2 also makes the `risk_score` scale explicit as 0-100 and requires deterministic bilingual response objects with `en` and `zh_tw` keys.

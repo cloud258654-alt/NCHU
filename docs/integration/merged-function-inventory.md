@@ -15,7 +15,7 @@ Not performed in this inventory: Supabase init/link/query, migration, db push, l
 | Platform adapters | Present under `Backend/adapters` for PTT, Google Maps, Threads, and web crawl4ai |
 | Dashboard backend read API | Present at `Backend/api/dashboard.py` |
 | Dashboard frontend app | Present under `apps/dashboard-ml` as a rebuilt read-only Dashboard application; not a restored original UI |
-| ML AI offline baseline | Present under `apps/dashboard-ml/ml` and `apps/dashboard-ml/backend`; deterministic rules baseline with Gate 4.1 contract fields and Traditional Chinese phrase support |
+| ML AI offline baseline | Present under `apps/dashboard-ml/ml` and `apps/dashboard-ml/backend`; deterministic rules baseline with Gate 4.2 canonical contract values, 0-100 risk scale, bilingual response templates, and Traditional Chinese phrase support |
 | Existing frontend | Present: `Frontend/register/index.html`, LIFF registration page only |
 | Dashboard API contract doc | Present: `docs/integration/dashboard-read-api.md` |
 | Supabase local project folder | Not used in this inventory |
@@ -75,5 +75,5 @@ Dashboard frontend application: present under apps/dashboard-ml
 Frontend Core API integration: implemented through BI_RMP_CORE_API_URL runtime config
 Direct Supabase access removal: statically verified for apps/dashboard-ml/frontend
 Original Dashboard parity: not claimed; this is a rebuilt application
-ML AI baseline: deterministic rules baseline only; Gate 4.1 API contract fields present; Traditional Chinese support is phrase-based; original trained model parity and accuracy are not claimed
+ML AI baseline: deterministic rules baseline only; Gate 4.2 API contract fields present; `model_name=bi-rmp-rules-baseline`, `model_version=1.1.0`, `analysis_method=rules_baseline`; risk is scored on a 0-100 scale; response suggestions include `en` and `zh_tw`; Traditional Chinese support is phrase-based; original trained model parity and accuracy are not claimed
 ```
