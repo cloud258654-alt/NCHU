@@ -289,6 +289,23 @@ td {
   text-transform: capitalize;
 }
 
+.chip.risk-high {
+  background: #fff1f0;
+  color: var(--risk);
+}
+
+.analysis-alert {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border: 1px solid #fecdca;
+  border-radius: 6px;
+  background: #fff4f2;
+  color: var(--risk);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 dialog {
   width: min(720px, calc(100vw - 32px));
   border: 1px solid var(--border);
@@ -317,6 +334,18 @@ dialog::backdrop {
 .dialog-body {
   padding-top: 16px;
   line-height: 1.55;
+}
+
+.detail-alert {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #fecdca;
+  border-radius: 8px;
+  background: #fff4f2;
+  color: var(--risk);
 }
 
 .detail-grid {

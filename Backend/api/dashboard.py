@@ -182,6 +182,13 @@ class DashboardRepository:
                             ar.sentiment,
                             ar.risk_level,
                             ar.summary,
+                            COALESCE(NULLIF(ar.score_explanation->>'critical', '')::boolean, false) AS critical,
+                            COALESCE(ar.score_explanation->'critical_signals', '[]'::jsonb) AS critical_signals,
+                            NULLIF(ar.score_explanation->>'escalation_level', '') AS escalation_level,
+                            COALESCE(
+                                NULLIF(ar.score_explanation->'rules_baseline'->>'human_review_required', '')::boolean,
+                                false
+                            ) AS human_review_required,
                             ar.analyzed_at
                         FROM analysis_results ar
                         WHERE ar.target_type = 'crawl_post'
@@ -201,6 +208,10 @@ class DashboardRepository:
                         la.sentiment,
                         la.risk_level,
                         la.summary,
+                        la.critical,
+                        la.critical_signals,
+                        la.escalation_level,
+                        la.human_review_required,
                         COUNT(*) OVER()::integer AS total_count
                     FROM crawl_posts cp
                     JOIN crawl_jobs cj ON cj.id = cp.crawl_job_id
@@ -240,6 +251,13 @@ class DashboardRepository:
                             ar.risk_level,
                             ar.summary,
                             ar.recommendation,
+                            COALESCE(NULLIF(ar.score_explanation->>'critical', '')::boolean, false) AS critical,
+                            COALESCE(ar.score_explanation->'critical_signals', '[]'::jsonb) AS critical_signals,
+                            NULLIF(ar.score_explanation->>'escalation_level', '') AS escalation_level,
+                            COALESCE(
+                                NULLIF(ar.score_explanation->'rules_baseline'->>'human_review_required', '')::boolean,
+                                false
+                            ) AS human_review_required,
                             ar.analyzed_at
                         FROM analysis_results ar
                         WHERE ar.target_type = 'crawl_post'
@@ -269,6 +287,10 @@ class DashboardRepository:
                         la.risk_level,
                         la.summary,
                         la.recommendation,
+                        la.critical,
+                        la.critical_signals,
+                        la.escalation_level,
+                        la.human_review_required,
                         la.analyzed_at
                     FROM crawl_posts cp
                     JOIN crawl_jobs cj ON cj.id = cp.crawl_job_id

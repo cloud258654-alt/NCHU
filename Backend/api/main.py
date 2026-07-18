@@ -7,6 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 try:
@@ -61,6 +62,12 @@ app = FastAPI(
     title="BI-RMP Integration API",
     version="0.3.1",
     description="Backend endpoints used by n8n and LINE Messaging API workflows.",
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:8010", "http://localhost:8010"],
+    allow_methods=["GET", "OPTIONS"],
+    allow_headers=["*"],
 )
 app.add_api_route(
     "/api/dashboard/businesses",
