@@ -130,8 +130,12 @@ def _fake_core_app(state: FakeCoreState) -> FastAPI:
                     "published_at": "2026-07-17T00:00:00Z",
                     "updated_at": "2026-07-18T00:00:00Z",
                     "sentiment": "positive",
-                    "risk_level": "low",
+                    "risk_level": "high",
                     "summary": "Customer liked the service.",
+                    "critical": True,
+                    "critical_signals": ["medical escalation"],
+                    "escalation_level": "critical",
+                    "human_review_required": True,
                 }
             ],
             "page": page,
@@ -152,8 +156,12 @@ def _fake_core_app(state: FakeCoreState) -> FastAPI:
             "title": f"Useful review {review_id}",
             "content": "Full fake review detail body.",
             "sentiment": "positive",
-            "risk_level": "low",
+            "risk_level": "high",
             "recommendation": "Follow up with the customer.",
+            "critical": True,
+            "critical_signals": ["medical escalation"],
+            "escalation_level": "critical",
+            "human_review_required": True,
             "link": f"https://example.test/reviews/{review_id}",
         }
 
@@ -221,6 +229,7 @@ def test_dashboard_loads_data_and_uses_core_api_only(dashboard_browser) -> None:
     expect(page.locator("#metricTotalItems")).to_have_text("9")
     expect(page.locator("#metricRisk")).to_have_text("medium")
     expect(page.get_by_text("Useful review 101")).to_be_visible()
+    expect(page.locator("#reviewsTable")).to_contain_text("Manual review")
     assert "/api/dashboard/businesses" in state.requests
     assert any(request.startswith("/api/dashboard/reviews?page=1") for request in state.requests)
     _assert_no_direct_supabase(browser_requests)
@@ -273,6 +282,8 @@ def test_dashboard_review_detail_200_and_404(dashboard_browser) -> None:
     page.get_by_text("Useful review 101").click()
     expect(page.locator("#reviewDialog")).to_contain_text("Full fake review detail body.")
     expect(page.locator("#reviewDialog")).to_contain_text("Follow up with the customer.")
+    expect(page.locator("#reviewDialog")).to_contain_text("Critical incident")
+    expect(page.locator("#reviewDialog")).to_contain_text("Critical signals")
 
     state.detail_404 = True
     page.evaluate("window.__BI_RMP_DASHBOARD_TEST__.openReview(404)")

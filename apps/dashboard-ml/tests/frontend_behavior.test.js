@@ -137,7 +137,11 @@ function defaultRoute(parsed) {
       title: "Useful review",
       content: "The review detail body.",
       sentiment: "positive",
-      risk_level: "low",
+      risk_level: "high",
+      critical: true,
+      critical_signals: ["medical escalation"],
+      escalation_level: "critical",
+      human_review_required: true,
     });
   }
   if (parsed.pathname.endsWith("/reviews")) {
@@ -150,7 +154,11 @@ function defaultRoute(parsed) {
           title: "Useful review",
           content: "Compact review text.",
           sentiment: "positive",
-          risk_level: "low",
+          risk_level: "high",
+          critical: true,
+          critical_signals: ["medical escalation"],
+          escalation_level: "critical",
+          human_review_required: true,
           updated_at: "2026-07-18T00:00:00Z",
         },
       ],
@@ -249,6 +257,7 @@ async function testSummaryNormalAndError() {
 async function testReviewsNormalAndEmpty() {
   const normal = await runDashboard();
   assert.strictEqual(normal.elements.reviewsTable.children.length, 1);
+  assert(normal.elements.reviewsTable.children[0].innerHTML.includes("Manual review"));
   assert.strictEqual(normal.elements.emptyState.hidden, true);
 
   const empty = await runDashboard((parsed) => {
@@ -284,6 +293,9 @@ async function testReviewDetail200And404() {
   await flush();
   assert.strictEqual(dashboard.elements.reviewDialog.opened, true);
   assert(dashboard.calls.some((call) => call.endsWith("/api/dashboard/reviews/101")));
+  assert(dashboard.elements.dialogBody.innerHTML.includes("Critical incident"));
+  assert(dashboard.elements.dialogBody.innerHTML.includes("Manual review"));
+  assert(dashboard.elements.dialogBody.innerHTML.includes("Critical signals"));
 
   const notFound = await runDashboard((parsed) => {
     if (parsed.pathname.endsWith("/reviews/404")) {

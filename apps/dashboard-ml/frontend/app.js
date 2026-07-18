@@ -102,6 +102,42 @@
     return normalized || fallback || "Not available";
   }
 
+  function boolValue(value) {
+    if (value === true) {
+      return true;
+    }
+    if (typeof value === "string") {
+      return value.toLowerCase() === "true";
+    }
+    return false;
+  }
+
+  function criticalSignals(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.map((item) => text(item, "")).filter(Boolean);
+  }
+
+  function needsManualReview(review) {
+    return boolValue(review.critical)
+      || boolValue(review.human_review_required)
+      || text(review.escalation_level, "none").toLowerCase() === "critical";
+  }
+
+  function riskChip(review) {
+    const risk = text(review.risk_level, "none");
+    const riskClass = risk.toLowerCase() === "high" ? " risk-high" : "";
+    return `<span class="chip${riskClass}">${escapeHtml(risk)}</span>`;
+  }
+
+  function analysisAlert(review) {
+    if (!needsManualReview(review)) {
+      return "";
+    }
+    return '<span class="analysis-alert">Critical / Manual review</span>';
+  }
+
   function applySummary(summary) {
     els.metricTotalItems.textContent = formatNumber(summary.total_items);
     els.metricReviews.textContent = formatNumber(summary.total_reviews);
@@ -133,9 +169,10 @@
       <td>
         <span class="review-title">${escapeHtml(title)}</span>
         <span class="review-snippet">${escapeHtml(snippet.slice(0, 180))}</span>
+        ${analysisAlert(review)}
       </td>
       <td><span class="chip">${escapeHtml(text(review.sentiment, "unclassified"))}</span></td>
-      <td><span class="chip">${escapeHtml(text(review.risk_level, "none"))}</span></td>
+      <td>${riskChip(review)}</td>
       <td>${escapeHtml(formatDate(review.updated_at || review.published_at))}</td>
     `;
     row.addEventListener("click", () => openReview(review.id));
@@ -188,15 +225,20 @@
     setError(null);
     try {
       const review = await fetchJson(endpoint(`/reviews/${encodeURIComponent(reviewId)}`));
+      const signals = criticalSignals(review.critical_signals);
       els.dialogTitle.textContent = text(review.title || review.summary, "Review detail");
       els.dialogBody.innerHTML = `
+        ${needsManualReview(review) ? '<div class="detail-alert"><strong>Critical incident</strong><span>Manual review required</span></div>' : ""}
         <div class="detail-grid">
           <div><span>Business</span>${escapeHtml(text(review.business_name, "Unknown business"))}</div>
           <div><span>Platform</span>${escapeHtml(text(review.platform, "unknown"))}</div>
           <div><span>Sentiment</span>${escapeHtml(text(review.sentiment, "unclassified"))}</div>
           <div><span>Risk</span>${escapeHtml(text(review.risk_level, "none"))}</div>
+          <div><span>Escalation</span>${escapeHtml(text(review.escalation_level, "none"))}</div>
+          <div><span>Manual review</span>${boolValue(review.human_review_required) ? "Required" : "Not required"}</div>
         </div>
         <p>${escapeHtml(text(review.content, "No review content available."))}</p>
+        ${signals.length ? `<p><strong>Critical signals:</strong> ${escapeHtml(signals.join(", "))}</p>` : ""}
         ${review.recommendation ? `<p><strong>Recommendation:</strong> ${escapeHtml(review.recommendation)}</p>` : ""}
         ${review.link ? `<p><a href="${escapeAttribute(review.link)}" target="_blank" rel="noreferrer">Open source review</a></p>` : ""}
       `;
