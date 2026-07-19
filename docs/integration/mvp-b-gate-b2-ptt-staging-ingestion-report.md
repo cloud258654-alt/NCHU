@@ -167,7 +167,7 @@ The canonical join path was verified:
 business -> service_tasks -> crawl_jobs -> crawl_posts -> post_metric_snapshots
 ```
 
-## Supplemental Acceptance
+## Supplemental Acceptance And Precise Rollback
 
 PASS.
 
@@ -210,47 +210,131 @@ B2 join readback remained valid:
 | `post_metric_snapshots` for B2 post | `1` |
 | `crawl_comments` for B2 post | `0` |
 
-Rollback rehearsal was executed against `crawl_jobs.id = 15` and `service_task_id = 7` only. No `DELETE` was used. The transaction's final statement was `ROLLBACK`.
+The earlier marker-only rehearsal was superseded because it did not prove fixture removal inside the transaction. The final rollback rehearsal used a precise B2 selector and transaction-scoped deletes, with `ROLLBACK` as the final statement.
+
+Rollback selector:
+
+| Field | Value |
+| --- | --- |
+| `service_tasks.id` | `7` |
+| `business.id` | `7` |
+| `business.name` | `coffee` |
+| `clients.id` | `8` |
+| `clients.line_user_id` | `default-line-id` |
+| `crawl_jobs.id` | `15` |
+| `crawl_jobs.platform` | `ptt` |
+| `crawl_posts.id` | `15` |
+| `crawl_posts.platform_post_id` | `M.1783265624.A.F68.html` |
+| `crawl_posts.link` | `https://www.ptt.cc/bbs/Food/M.1783265624.A.F68.html` |
+| `crawl_posts.extra_data.platform` | `ptt` |
+| `crawl_posts.dedupe_key` | `NULL` |
+
+Rollback artifact:
+
+- `database/testdata/mvp_b2_ptt_rollback_rehearsal.sql`
 
 Command shape:
 
 ```sql
 begin;
-update public.crawl_jobs
-set execution_config = coalesce(execution_config, '{}'::jsonb) || jsonb_build_object(
-      'gate_b2_rollback_rehearsal', 'rolled_back',
-      'gate_b2_rollback_rehearsed_at', now()::text
-    ),
-    updated_at = now()
-where id = 15
-  and service_task_id = 7
-  and platform = 'ptt'
-returning id, service_task_id, platform, status,
-  execution_config->>'gate_b2_rollback_rehearsal' as rehearsal_marker;
+create temporary table gate_b2_ptt_target on commit drop as ...
+delete from public.comment_metric_snapshots where ...;
+delete from public.crawl_comments where ...;
+delete from public.post_metric_snapshots where ...;
+delete from public.crawl_posts where ...;
+delete from public.crawl_logs where ...;
+delete from public.crawl_jobs where ...;
+delete from public.service_tasks where ...;
+delete from public.business where ...;
+delete from public.clients where ...;
+select phase, table_name, row_count
+from gate_b2_ptt_rehearsal_counts
+order by ...;
 rollback;
 ```
 
-Transaction readback before rollback returned:
+Transaction readback:
 
-| Field | Value |
-| --- | --- |
-| `id` | `15` |
-| `service_task_id` | `7` |
-| `platform` | `ptt` |
-| `status` | `success` |
-| `rehearsal_marker` | `rolled_back` |
+| Phase | Table | Row Count |
+| --- | --- | ---: |
+| `before` | `business` | 1 |
+| `before` | `clients` | 1 |
+| `before` | `comment_metric_snapshots` | 0 |
+| `before` | `crawl_comments` | 0 |
+| `before` | `crawl_jobs` | 1 |
+| `before` | `crawl_logs` | 25 |
+| `before` | `crawl_posts` | 1 |
+| `before` | `post_metric_snapshots` | 1 |
+| `before` | `service_tasks` | 1 |
+| `deleted` | `business` | 1 |
+| `deleted` | `clients` | 1 |
+| `deleted` | `comment_metric_snapshots` | 0 |
+| `deleted` | `crawl_comments` | 0 |
+| `deleted` | `crawl_jobs` | 1 |
+| `deleted` | `crawl_logs` | 25 |
+| `deleted` | `crawl_posts` | 1 |
+| `deleted` | `post_metric_snapshots` | 1 |
+| `deleted` | `service_tasks` | 1 |
+| `after_delete` | `business` | 0 |
+| `after_delete` | `clients` | 0 |
+| `after_delete` | `comment_metric_snapshots` | 0 |
+| `after_delete` | `crawl_comments` | 0 |
+| `after_delete` | `crawl_jobs` | 0 |
+| `after_delete` | `crawl_logs` | 0 |
+| `after_delete` | `crawl_posts` | 0 |
+| `after_delete` | `post_metric_snapshots` | 0 |
+| `after_delete` | `service_tasks` | 0 |
 
 Post-rollback verification:
 
 | Check | Result |
 | --- | --- |
-| `gate_b2_rollback_rehearsal` marker present | `false` |
-| `gate_b2_rollback_rehearsed_at` marker present | `false` |
+| `service_tasks.id = 7` | `1` |
+| `business.id = 7` | `1` |
+| `clients.id = 8` | `1` |
+| `crawl_jobs.id = 15` | `1` |
+| `crawl_posts.id = 15` | `1` |
+| `post_metric_snapshots` for B2 post | `1` |
+| `crawl_comments` for B2 post | `0` |
+| `comment_metric_snapshots` for B2 post | `0` |
+| `crawl_logs` for B2 task | `25` |
 | `service_tasks` count | `2` |
+| `business` count | `2` |
+| `clients` count | `2` |
 | `crawl_jobs` count | `4` |
 | `crawl_posts` count | `4` |
 | `post_metric_snapshots` count | `4` |
+| `crawl_logs` count | `26` |
 | `analysis_results` count | `3` |
+
+This proves the transaction-internal B2 fixture count reached zero and the final `ROLLBACK` restored the fixture and core row counts.
+
+## Final Regression
+
+PASS.
+
+Focused tests:
+
+```text
+.\.venv\Scripts\python.exe -m pytest Backend\tests\adapters\test_ptt_parser.py Backend\tests\core\test_runtime_staging_guard.py
+```
+
+Result:
+
+- `34 passed`
+- Warnings: `0`
+
+Full regression:
+
+```text
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+Result:
+
+- `299 passed`
+- Warnings: `1`
+- Warning: `StarletteDeprecationWarning` from `.venv\Lib\site-packages\fastapi\testclient.py`
 
 Supplemental acceptance did not run Google Maps, Threads, n8n, LINE, Ollama, post-crawl AI, migration, schema, RLS, grant, policy, production, old Supabase, `main` merge, or `main` push operations.
 
