@@ -1,4 +1,6 @@
+import base64
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -44,3 +46,116 @@ def test_status_endpoint_supports_explicit_and_latest_task_lookup():
 
     assert "/jobs/' + $json.taskId + '/status" in url
     assert "/jobs/status/latest" in url
+
+
+def test_status_formatter_does_not_expose_raw_backend_errors(tmp_path):
+    forbidden = [
+        "DATABASE_URL",
+        "postgres://",
+        "user:pass",
+        "db.supabase.co",
+        "SELECT",
+        "clients",
+        "Traceback",
+        "E:\\Ai study",
+        "LINE_CHANNEL_ACCESS_TOKEN",
+        "password",
+        "service_role",
+    ]
+    malicious_statuses = [
+        {
+            "status": "failed",
+            "task_id": 77,
+            "error_type": "internal_error",
+            "error_message": "DATABASE_URL=postgres://user:pass@db.supabase.co SELECT * FROM clients",
+        },
+        {
+            "status": "timeout",
+            "task_id": 77,
+            "error_message": 'Traceback (most recent call last)\nFile "E:\\Ai study\\NCHU\\Backend\\api\\main.py"',
+        },
+        {
+            "status": "cancelled",
+            "task_id": 77,
+            "error_message": "LINE_CHANNEL_ACCESS_TOKEN=abc123 password=secret service_role=xyz",
+        },
+        {
+            "status": "failed",
+            "task_id": 77,
+            "error_type": "database_unavailable",
+            "error_message": "psycopg2 could not connect to db.supabase.co",
+        },
+    ]
+
+    status_code = _node_code("Format Crawl Status Response")
+    assert "status.error_message" not in status_code
+
+    for status in malicious_statuses:
+        message = _run_status_formatter(tmp_path, status)
+        text = message["text"]
+        assert message["type"] == "text"
+        assert all(value not in text for value in forbidden)
+        assert text
+        assert text != status["error_message"]
+
+
+def test_status_formatter_preserves_success_and_running_paths(tmp_path):
+    completed = _run_status_formatter(
+        tmp_path,
+        {
+            "status": "completed",
+            "task_id": 77,
+            "articles_found": 2,
+            "comments_found": 3,
+        },
+    )
+    running = _run_status_formatter(
+        tmp_path,
+        {
+            "status": "running",
+            "task_id": 77,
+            "platform_results": [{"platform": "ptt", "status": "running"}],
+        },
+    )
+
+    assert "2" in completed["text"]
+    assert "3" in completed["text"]
+    assert running["quickReply"]["items"][0]["action"]["data"] == "crawl_status:77"
+    assert "ptt" not in running["text"]
+    assert "PTT" in running["text"]
+
+
+def _node_code(node_name: str) -> str:
+    workflow = _workflow()
+    nodes = {node["name"]: node for node in workflow["nodes"]}
+    return nodes[node_name]["parameters"]["jsCode"]
+
+
+def _run_status_formatter(tmp_path: Path, status: dict[str, object]) -> dict[str, object]:
+    code = _node_code("Format Crawl Status Response")
+    event = {
+        "replyToken": "reply-token",
+        "lineUserId": "U-A",
+        "taskId": status.get("task_id"),
+    }
+    runner = tmp_path / "run_status_formatter.js"
+    encoded_code = base64.b64encode(code.encode("utf-8")).decode("ascii")
+    runner.write_text(
+        "const workflowCode = Buffer.from("
+        + json.dumps(encoded_code)
+        + ", 'base64').toString('utf8');\n"
+        "globalThis.$json = " + json.dumps(status, ensure_ascii=False) + ";\n"
+        "const event = " + json.dumps(event, ensure_ascii=False) + ";\n"
+        "globalThis.$ = () => ({ item: { json: event } });\n"
+        "const output = new Function(workflowCode)();\n"
+        "process.stdout.write(JSON.stringify(output[0].json.messages[0]));\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        ["node", str(runner)],
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        text=True,
+    )
+    return json.loads(result.stdout)

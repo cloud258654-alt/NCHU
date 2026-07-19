@@ -62,8 +62,8 @@ LINE Official Account
    database is unavailable, prepare a short LINE maintenance message.
    If a business is found, continue through the registered-business path.
    If no business is found, prepare a LINE notice that includes the user's LINE
-   ID and says the store data is not registered yet, then continue through the
-   demo business fallback path.
+   ID and says the store data is not registered yet. Do not continue to a
+   global or demo report path for a registered-customer request.
 
 5. HTTP Request and Reply nodes
    For a registered business, create a durable task first:
@@ -102,11 +102,19 @@ LINE Official Account
    The request includes `line_user_id`; a task owned by another LINE user is
    returned as not found. Pending or running tasks receive a progress Reply and
    another Quick Reply. Completed or partial tasks continue to the report API.
-   Failed or timed-out tasks receive an error Reply.
+   Failed, timed-out, or cancelled tasks receive an error Reply selected from
+   public status/error-type mapping. The customer-facing formatter must not
+   include backend `error_message`, SQL, connection strings, Supabase refs,
+   tokens, credentials, stack traces, or local paths.
 
 8. HTTP Request node
-   Return the quantitative report only for the demo path or a completed job:
+   Return the quantitative report only for a completed or partial owned job:
    POST ${BI_RMP_BACKEND_BASE_URL}/api/line/reputation-summary
+
+   The request includes `line_user_id` and, for status-triggered reports,
+   `task_id`. The backend validates that the task resolves through
+   `service_tasks.business_id -> business.client_id -> clients.line_user_id`
+   before reading canonical crawl data.
 
 9. Code node
    If the report API returns `line_messages`, pass them to LINE.
@@ -119,7 +127,7 @@ LINE Official Account
 
 The workflow intentionally does not notify users proactively. They must click
 `查詢進度` or send that text later. This keeps crawler progress and completed
-results on Reply API messages while retaining the current global report scope.
+results on Reply API messages while retaining tenant-scoped report delivery.
 Users without registered store data receive a registration Flex Message through
 the current Reply API interaction. The registration button is included only
 when `LINE_LIFF_ID` or the fallback `BI_RMP_REGISTRATION_URL` is configured.

@@ -3,8 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 
-def attach_quantitative_metrics(summary: dict[str, Any]) -> dict[str, Any]:
-    """Attach calculated rates to the reviews_enriched report response.
+def attach_quantitative_metrics(
+    summary: dict[str, Any],
+    *,
+    report_type: str = "reviews_enriched_quantitative",
+) -> dict[str, Any]:
+    """Attach calculated rates to a reputation report response.
 
     Sentiment percentages use analyzed reviews as the denominator. Coverage and
     unclassified percentages use all collected reviews as the denominator.
@@ -40,7 +44,7 @@ def attach_quantitative_metrics(summary: dict[str, Any]) -> dict[str, Any]:
     )
 
     summary["report_contract"] = {
-        "report_type": "reviews_enriched_quantitative",
+        "report_type": report_type,
         "version": "1.0",
         "sentiment_rate_denominator": "analyzed_reviews",
         "coverage_denominator": "total_reviews",

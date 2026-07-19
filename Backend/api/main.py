@@ -20,7 +20,6 @@ from api.client_recognition import (
     ClientRecognitionRequest,
 )
 from api.reputation_crawl import ReputationCrawlJobService, ReputationCrawlResult
-from api.enriched_reputation import EnrichedReputationSummaryService
 from api.line_flex import build_reputation_flex_message, build_registration_flex_message
 from api.line_registration_notification import LineRegistrationNotificationService
 from api.liff_registration import (
@@ -37,8 +36,12 @@ from api.models import (
     ReputationSummaryRequest,
 )
 from api.quantitative_report import attach_quantitative_metrics
-from api.reputation import DatabaseConfigurationError
-from api.reviews_enriched import ReviewsEnrichedRepository
+from api.reputation import (
+    BusinessNotFoundError,
+    DatabaseConfigurationError,
+    PostgresReputationRepository,
+    ReputationSummaryService,
+)
 from api.business import (
     BusinessRepository,
     BusinessCheckDuplicateRequest,
@@ -117,13 +120,13 @@ def get_line_registration_notification_service() -> LineRegistrationNotification
 
 
 @lru_cache(maxsize=1)
-def get_reputation_repository() -> ReviewsEnrichedRepository:
-    return ReviewsEnrichedRepository()
+def get_reputation_repository() -> PostgresReputationRepository:
+    return PostgresReputationRepository()
 
 
 @lru_cache(maxsize=1)
-def get_reputation_service() -> EnrichedReputationSummaryService:
-    return EnrichedReputationSummaryService(get_reputation_repository())
+def get_reputation_service() -> ReputationSummaryService:
+    return ReputationSummaryService(get_reputation_repository())
 
 
 @lru_cache(maxsize=1)
@@ -357,48 +360,105 @@ async def line_reputation_summary(payload: ReputationSummaryRequest) -> dict:
     requested_business_name = (
         payload.business_name or extract_business_name(payload.message_text)
     )
-    report_scope = get_reputation_repository().resolve_business(
-        line_user_id=payload.line_user_id,
-        business_name=requested_business_name,
-        business_id=payload.business_id,
-    )
-
-    reputation_crawl_result = ReputationCrawlResult(
-        status="skipped",
-        business_name=report_scope.name,
-        duration_seconds=0.0,
-        reason="global reviews_enriched report uses existing rows",
-    )
-
     try:
         result = await asyncio.to_thread(
             get_reputation_service().build_summary,
             line_user_id=payload.line_user_id,
             business_name=requested_business_name,
             business_id=payload.business_id,
+            task_id=payload.task_id,
+        )
+    except BusinessNotFoundError as exc:
+        if payload.task_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="reputation report not found",
+            ) from exc
+        return _line_reputation_no_business_response(
+            payload=payload,
+            requested_business_name=requested_business_name,
         )
     except DatabaseConfigurationError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail="reputation summary database is unavailable",
         ) from exc
 
-    attach_quantitative_metrics(result)
+    attach_quantitative_metrics(result, report_type="canonical_reputation_summary")
+    report_scope = result.get("data_contract", {}).get("report_scope", "business")
+    reputation_crawl_result = ReputationCrawlResult(
+        status="skipped",
+        business_name=result["business"]["name"],
+        duration_seconds=0.0,
+        reason="canonical business-scoped report uses existing crawl rows",
+        task_id=str(payload.task_id) if payload.task_id is not None else None,
+    )
     result["ok"] = True
     result["request"] = {
         "message_text": payload.message_text,
         "requested_business_name": requested_business_name,
-        "business_name": report_scope.name,
-        "business_id": report_scope.id,
+        "business_name": result["business"]["name"],
+        "business_id": result["business"]["id"],
+        "task_id": payload.task_id,
         "webhook_event_id": payload.webhook_event_id,
         "requested_refresh": payload.refresh,
         "refresh": False,
-        "report_scope": "all_rows",
+        "report_scope": report_scope,
     }
-    result["data_contract"]["report_scope"] = "all_rows"
     result["refresh"] = reputation_crawl_result.to_dict()
     result["line_messages"] = build_reputation_flex_message(result)
     return result
+
+
+def _line_reputation_no_business_response(
+    *,
+    payload: ReputationSummaryRequest,
+    requested_business_name: str | None,
+) -> dict[str, object]:
+    return {
+        "ok": False,
+        "status": "no_business",
+        "business": None,
+        "overview": {
+            "total_reviews": 0,
+            "analyzed_reviews": 0,
+            "positive": 0,
+            "neutral": 0,
+            "negative": 0,
+            "unclassified": 0,
+            "risk_score": None,
+            "risk_points": None,
+            "risk_level": None,
+            "summary": "No registered business is available for this LINE user.",
+            "updated_at": None,
+        },
+        "overall": {
+            "score_status": "insufficient_data",
+            "coverage_ratio": 0.0,
+            "included_platforms": [],
+            "missing_platforms": [],
+            "data_status": "no_business",
+            "crawl_status_counts": {},
+        },
+        "platforms": [],
+        "data_contract": {
+            "report_scope": "none",
+            "source_tables": [],
+            "numeric_risk_available": False,
+        },
+        "request": {
+            "message_text": payload.message_text,
+            "requested_business_name": requested_business_name,
+            "business_name": None,
+            "business_id": None,
+            "task_id": payload.task_id,
+            "webhook_event_id": payload.webhook_event_id,
+            "requested_refresh": payload.refresh,
+            "refresh": False,
+            "report_scope": "none",
+        },
+        "line_messages": build_registration_flex_message(payload.line_user_id),
+    }
 
 
 @app.post(

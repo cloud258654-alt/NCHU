@@ -12,6 +12,7 @@ class ReputationSummaryRequest(BaseModel):
     message_text: str | None = Field(default=None, max_length=5000)
     business_name: str | None = Field(default=None, max_length=255)
     business_id: int | None = Field(default=None, gt=0)
+    task_id: int | None = Field(default=None, gt=0)
     webhook_event_id: str | None = Field(default=None, max_length=255)
     refresh: bool = True
 

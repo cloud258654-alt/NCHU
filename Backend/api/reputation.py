@@ -33,10 +33,19 @@ class RepositorySnapshot:
     platform_rows: list[dict[str, Any]]
     latest_summary: str | None
     numeric_risk_available: bool
+    report_scope: str = "business"
+    task_id: str | None = None
+    crawl_status_counts: dict[str, int] | None = None
 
 
 class SnapshotRepository(Protocol):
-    def load_snapshot(self, line_user_id: str, business_id: int | None = None) -> RepositorySnapshot:
+    def load_snapshot(
+        self,
+        line_user_id: str,
+        business_id: int | None = None,
+        business_name: str | None = None,
+        task_id: int | str | None = None,
+    ) -> RepositorySnapshot:
         ...
 
 
@@ -62,17 +71,53 @@ WHERE c.line_user_id = %s
 LIMIT 1
 """
 
-LATEST_SUMMARY_SQL = """
+BUSINESS_BY_NAME_SQL = """
+SELECT b.id, b.name, b.branch_name
+FROM clients c
+JOIN business b ON b.client_id = c.id
+WHERE c.line_user_id = %s
+  AND lower(btrim(b.name)) = lower(btrim(%s))
+  AND c.status = 'active'
+  AND b.status = 'active'
+ORDER BY b.id
+LIMIT 1
+"""
+
+BUSINESS_BY_TASK_SQL = """
+SELECT b.id, b.name, b.branch_name
+FROM clients c
+JOIN business b ON b.client_id = c.id
+JOIN service_tasks st ON st.business_id = b.id
+WHERE c.line_user_id = %s
+  AND st.id = %s
+  AND st.service_type = 'reputation_monitoring'
+  AND c.status = 'active'
+  AND b.status = 'active'
+LIMIT 1
+"""
+
+CRAWL_STATUS_COUNTS_SQL = """
+SELECT status, COUNT(*)::integer AS count
+FROM crawl_jobs
+WHERE service_task_id = %s
+GROUP BY status
+"""
+
+BUSINESS_TARGETS_SQL = """
 WITH targets AS (
     SELECT
         st.business_id,
         'crawl_post'::text AS target_type,
         cp.id AS target_id,
+        COALESCE(NULLIF(lower(cj.platform), ''), 'unknown') AS platform,
         cp.updated_at AS observed_at
     FROM crawl_posts cp
     JOIN crawl_jobs cj ON cj.id = cp.crawl_job_id
     JOIN service_tasks st ON st.id = cj.service_task_id
     WHERE st.business_id = %s
+      AND st.status <> 'cancelled'
+      AND cj.status <> 'cancelled'
+      AND cp.is_deleted = false
 
     UNION ALL
 
@@ -80,13 +125,56 @@ WITH targets AS (
         st.business_id,
         'crawl_comment'::text AS target_type,
         cc.id AS target_id,
+        COALESCE(NULLIF(lower(cj.platform), ''), 'unknown') AS platform,
         cc.updated_at AS observed_at
     FROM crawl_comments cc
     JOIN crawl_posts cp ON cp.id = cc.crawl_post_id
     JOIN crawl_jobs cj ON cj.id = cp.crawl_job_id
     JOIN service_tasks st ON st.id = cj.service_task_id
     WHERE st.business_id = %s
-),
+      AND st.status <> 'cancelled'
+      AND cj.status <> 'cancelled'
+      AND cp.is_deleted = false
+      AND cc.is_deleted = false
+)
+"""
+
+TASK_TARGETS_SQL = """
+WITH targets AS (
+    SELECT
+        st.business_id,
+        'crawl_post'::text AS target_type,
+        cp.id AS target_id,
+        COALESCE(NULLIF(lower(cj.platform), ''), 'unknown') AS platform,
+        cp.updated_at AS observed_at
+    FROM service_tasks st
+    JOIN crawl_jobs cj ON cj.service_task_id = st.id
+    JOIN crawl_posts cp ON cp.crawl_job_id = cj.id
+    WHERE st.id = %s
+      AND cj.status <> 'cancelled'
+      AND cp.is_deleted = false
+
+    UNION ALL
+
+    SELECT
+        st.business_id,
+        'crawl_comment'::text AS target_type,
+        cc.id AS target_id,
+        COALESCE(NULLIF(lower(cj.platform), ''), 'unknown') AS platform,
+        cc.updated_at AS observed_at
+    FROM service_tasks st
+    JOIN crawl_jobs cj ON cj.service_task_id = st.id
+    JOIN crawl_posts cp ON cp.crawl_job_id = cj.id
+    JOIN crawl_comments cc ON cc.crawl_post_id = cp.id
+    WHERE st.id = %s
+      AND cj.status <> 'cancelled'
+      AND cp.is_deleted = false
+      AND cc.is_deleted = false
+)
+"""
+
+LATEST_SUMMARY_SELECT_SQL = """
+,
 latest_analysis AS (
     SELECT DISTINCT ON (ar.target_type, ar.target_id)
         ar.target_type,
@@ -95,6 +183,7 @@ latest_analysis AS (
         ar.analyzed_at,
         ar.id
     FROM analysis_results ar
+    WHERE {valid_analysis_predicate}
     ORDER BY ar.target_type, ar.target_id, ar.analyzed_at DESC, ar.id DESC
 )
 SELECT la.summary
@@ -108,37 +197,8 @@ ORDER BY la.analyzed_at DESC, la.id DESC
 LIMIT 1
 """
 
-def _platform_stats_sql(*, include_numeric_risk: bool) -> str:
-    risk_score_expression = "ar.risk_score" if include_numeric_risk else "NULL::numeric"
-    risk_points_expression = "ar.risk_points" if include_numeric_risk else "NULL::integer"
-
-    return f"""
-WITH targets AS (
-    SELECT
-        st.business_id,
-        'crawl_post'::text AS target_type,
-        cp.id AS target_id,
-        COALESCE(NULLIF(lower(cj.platform), ''), 'unknown') AS platform,
-        cp.updated_at AS observed_at
-    FROM crawl_posts cp
-    JOIN crawl_jobs cj ON cj.id = cp.crawl_job_id
-    JOIN service_tasks st ON st.id = cj.service_task_id
-    WHERE st.business_id = %s
-
-    UNION ALL
-
-    SELECT
-        st.business_id,
-        'crawl_comment'::text AS target_type,
-        cc.id AS target_id,
-        COALESCE(NULLIF(lower(cj.platform), ''), 'unknown') AS platform,
-        cc.updated_at AS observed_at
-    FROM crawl_comments cc
-    JOIN crawl_posts cp ON cp.id = cc.crawl_post_id
-    JOIN crawl_jobs cj ON cj.id = cp.crawl_job_id
-    JOIN service_tasks st ON st.id = cj.service_task_id
-    WHERE st.business_id = %s
-),
+PLATFORM_STATS_SELECT_SQL = """
+,
 latest_analysis AS (
     SELECT DISTINCT ON (ar.target_type, ar.target_id)
         ar.target_type,
@@ -150,6 +210,7 @@ latest_analysis AS (
         {risk_points_expression} AS risk_points,
         ar.analyzed_at
     FROM analysis_results ar
+    WHERE {valid_analysis_predicate}
     ORDER BY ar.target_type, ar.target_id, ar.analyzed_at DESC, ar.id DESC
 ),
 joined AS (
@@ -201,6 +262,57 @@ ORDER BY
     platform
 """
 
+VALID_ANALYSIS_PREDICATE = """
+(
+    ar.analysis_status = 'completed'
+    OR (
+        ar.analysis_status IS NULL
+        AND (
+            ar.sentiment IS NOT NULL
+            OR ar.risk_level IS NOT NULL
+            OR NULLIF(btrim(ar.summary), '') IS NOT NULL
+            {legacy_numeric_clause}
+        )
+    )
+)
+"""
+
+
+def _latest_summary_sql(*, report_scope: str) -> str:
+    return _targets_sql(report_scope) + LATEST_SUMMARY_SELECT_SQL.format(
+        valid_analysis_predicate=_valid_analysis_predicate(include_numeric_risk=False),
+    )
+
+
+def _platform_stats_sql(*, report_scope: str, include_numeric_risk: bool) -> str:
+    risk_score_expression = "ar.risk_score" if include_numeric_risk else "NULL::numeric"
+    risk_points_expression = "ar.risk_points" if include_numeric_risk else "NULL::integer"
+
+    return _targets_sql(report_scope) + PLATFORM_STATS_SELECT_SQL.format(
+        risk_score_expression=risk_score_expression,
+        risk_points_expression=risk_points_expression,
+        valid_analysis_predicate=_valid_analysis_predicate(
+            include_numeric_risk=include_numeric_risk
+        ),
+    )
+
+
+def _targets_sql(report_scope: str) -> str:
+    if report_scope == "task":
+        return TASK_TARGETS_SQL
+    if report_scope == "business":
+        return BUSINESS_TARGETS_SQL
+    raise ValueError(f"unsupported reputation report scope: {report_scope}")
+
+
+def _valid_analysis_predicate(*, include_numeric_risk: bool) -> str:
+    legacy_numeric_clause = (
+        "\n            OR ar.risk_score IS NOT NULL\n            OR ar.risk_points IS NOT NULL"
+        if include_numeric_risk
+        else ""
+    )
+    return VALID_ANALYSIS_PREDICATE.format(legacy_numeric_clause=legacy_numeric_clause)
+
 
 class PostgresReputationRepository:
     def __init__(self, connection_factory: Callable[[], Any] | None = None) -> None:
@@ -217,34 +329,80 @@ class PostgresReputationRepository:
 
         return psycopg2.connect(database_url, connect_timeout=10)
 
-    def load_snapshot(self, line_user_id: str, business_id: int | None = None) -> RepositorySnapshot:
+    def load_snapshot(
+        self,
+        line_user_id: str,
+        business_id: int | None = None,
+        business_name: str | None = None,
+        task_id: int | str | None = None,
+    ) -> RepositorySnapshot:
         conn = self._connection_factory()
         try:
-            business = self._resolve_business(conn, line_user_id=line_user_id, business_id=business_id)
-            rows, numeric_risk_available = self._load_platform_rows(conn, business.id)
-            latest_summary = self._load_latest_summary(conn, business.id)
+            resolved_task_id = str(task_id) if task_id is not None else None
+            business = self._resolve_business(
+                conn,
+                line_user_id=line_user_id,
+                business_id=business_id,
+                business_name=business_name,
+                task_id=resolved_task_id,
+            )
+            report_scope = "task" if resolved_task_id is not None else "business"
+            scope_id = resolved_task_id if resolved_task_id is not None else business.id
+            rows, numeric_risk_available = self._load_platform_rows(
+                conn,
+                report_scope=report_scope,
+                scope_id=scope_id,
+            )
+            latest_summary = self._load_latest_summary(
+                conn,
+                report_scope=report_scope,
+                scope_id=scope_id,
+            )
+            crawl_status_counts = (
+                self._load_crawl_status_counts(conn, resolved_task_id)
+                if resolved_task_id is not None
+                else {}
+            )
             return RepositorySnapshot(
                 business=business,
                 platform_rows=rows,
                 latest_summary=latest_summary,
                 numeric_risk_available=numeric_risk_available,
+                report_scope=report_scope,
+                task_id=resolved_task_id,
+                crawl_status_counts=crawl_status_counts,
             )
         finally:
             conn.close()
 
     @staticmethod
-    def _resolve_business(conn: Any, *, line_user_id: str, business_id: int | None) -> BusinessRecord:
-        query = BUSINESS_BY_ID_SQL if business_id is not None else BUSINESS_BY_LINE_USER_SQL
-        params: tuple[Any, ...] = (
-            (line_user_id, business_id) if business_id is not None else (line_user_id,)
-        )
+    def _resolve_business(
+        conn: Any,
+        *,
+        line_user_id: str,
+        business_id: int | None,
+        business_name: str | None,
+        task_id: str | None,
+    ) -> BusinessRecord:
+        if task_id is not None:
+            query = BUSINESS_BY_TASK_SQL
+            params: tuple[Any, ...] = (line_user_id, task_id)
+        elif business_id is not None:
+            query = BUSINESS_BY_ID_SQL
+            params = (line_user_id, business_id)
+        elif business_name:
+            query = BUSINESS_BY_NAME_SQL
+            params = (line_user_id, business_name)
+        else:
+            query = BUSINESS_BY_LINE_USER_SQL
+            params = (line_user_id,)
 
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute(query, params)
             row = cursor.fetchone()
 
         if not row:
-            raise BusinessNotFoundError(f"你的 LINE-ID 為 {line_user_id}, 目前系統無法找到相對應的店家，請你先註冊再使用我們的服務。")
+            raise BusinessNotFoundError("reputation report not found")
 
         return BusinessRecord(
             id=int(row["id"]),
@@ -253,10 +411,21 @@ class PostgresReputationRepository:
         )
 
     @staticmethod
-    def _load_platform_rows(conn: Any, business_id: int) -> tuple[list[dict[str, Any]], bool]:
+    def _load_platform_rows(
+        conn: Any,
+        *,
+        report_scope: str,
+        scope_id: int | str,
+    ) -> tuple[list[dict[str, Any]], bool]:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute(_platform_stats_sql(include_numeric_risk=True), (business_id, business_id))
+                cursor.execute(
+                    _platform_stats_sql(
+                        report_scope=report_scope,
+                        include_numeric_risk=True,
+                    ),
+                    (scope_id, scope_id),
+                )
                 return list(cursor.fetchall()), True
         except Exception as exc:
             if getattr(exc, "pgcode", None) != "42703":
@@ -264,15 +433,33 @@ class PostgresReputationRepository:
 
             conn.rollback()
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute(_platform_stats_sql(include_numeric_risk=False), (business_id, business_id))
+                cursor.execute(
+                    _platform_stats_sql(
+                        report_scope=report_scope,
+                        include_numeric_risk=False,
+                    ),
+                    (scope_id, scope_id),
+                )
                 return list(cursor.fetchall()), False
 
     @staticmethod
-    def _load_latest_summary(conn: Any, business_id: int) -> str | None:
+    def _load_latest_summary(
+        conn: Any,
+        *,
+        report_scope: str,
+        scope_id: int | str,
+    ) -> str | None:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute(LATEST_SUMMARY_SQL, (business_id, business_id))
+            cursor.execute(_latest_summary_sql(report_scope=report_scope), (scope_id, scope_id))
             row = cursor.fetchone()
         return str(row["summary"]).strip() if row and row.get("summary") else None
+
+    @staticmethod
+    def _load_crawl_status_counts(conn: Any, task_id: str) -> dict[str, int]:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(CRAWL_STATUS_COUNTS_SQL, (task_id,))
+            rows = cursor.fetchall()
+        return {str(row["status"]): int(row["count"] or 0) for row in rows}
 
 
 PLATFORM_LABELS = {
@@ -288,8 +475,21 @@ class ReputationSummaryService:
     def __init__(self, repository: SnapshotRepository) -> None:
         self._repository = repository
 
-    def build_summary(self, line_user_id: str, business_id: int | None = None) -> dict[str, Any]:
-        snapshot = self._repository.load_snapshot(line_user_id=line_user_id, business_id=business_id)
+    def build_summary(
+        self,
+        line_user_id: str,
+        business_id: int | None = None,
+        business_name: str | None = None,
+        task_id: int | str | None = None,
+    ) -> dict[str, Any]:
+        load_kwargs: dict[str, Any] = {"line_user_id": line_user_id}
+        if business_id is not None:
+            load_kwargs["business_id"] = business_id
+        if business_name:
+            load_kwargs["business_name"] = business_name
+        if task_id is not None:
+            load_kwargs["task_id"] = task_id
+        snapshot = self._repository.load_snapshot(**load_kwargs)
         config = load_reputation_scoring_config()
         platforms = [self._to_platform_summary(row) for row in snapshot.platform_rows]
         overview = self._build_overview(platforms, snapshot.latest_summary)
@@ -297,8 +497,13 @@ class ReputationSummaryService:
         expected_platforms = ["google_maps", "ptt", "threads"]
         missing_platforms = [platform for platform in expected_platforms if platform not in included_platforms]
         coverage_ratio = round(len(included_platforms) / len(expected_platforms), 4) if expected_platforms else 0.0
+        data_status = _data_status(
+            total_reviews=overview.total_reviews,
+            crawl_status_counts=snapshot.crawl_status_counts or {},
+        )
 
         return {
+            "status": data_status,
             "analysis_mode": config["analysis"]["mode"],
             "scoring_version": config["version"],
             "business": {
@@ -317,6 +522,8 @@ class ReputationSummaryService:
                 "coverage_ratio": coverage_ratio,
                 "included_platforms": included_platforms,
                 "missing_platforms": missing_platforms,
+                "data_status": data_status,
+                "crawl_status_counts": snapshot.crawl_status_counts or {},
             },
             "platforms": [platform.to_dict() for platform in platforms],
             "data_contract": {
@@ -324,6 +531,16 @@ class ReputationSummaryService:
                 "risk_score_field": "analysis_results.risk_score",
                 "risk_points_field": "analysis_results.risk_points",
                 "numeric_risk_available": snapshot.numeric_risk_available,
+                "report_scope": snapshot.report_scope,
+                "source_tables": [
+                    "public.clients",
+                    "public.business",
+                    "public.service_tasks",
+                    "public.crawl_jobs",
+                    "public.crawl_posts",
+                    "public.crawl_comments",
+                    "public.analysis_results",
+                ],
             },
         }
 
@@ -424,4 +641,17 @@ def _score_status(analyzed_reviews: int, total_reviews: int) -> str:
         return "insufficient_data"
     if analyzed_reviews <= 0:
         return "provisional"
+    return "complete"
+
+
+def _data_status(*, total_reviews: int, crawl_status_counts: dict[str, int]) -> str:
+    if total_reviews <= 0:
+        return "no_data"
+    failed = sum(crawl_status_counts.get(status, 0) for status in ("failed", "timeout"))
+    succeeded = sum(
+        crawl_status_counts.get(status, 0)
+        for status in ("success", "completed", "partial_success")
+    )
+    if failed:
+        return "partial" if succeeded else "partial"
     return "complete"

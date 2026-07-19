@@ -38,7 +38,11 @@ COLORS = {
 
 
 def build_reputation_flex_message(summary: dict[str, Any]) -> list[dict[str, Any]]:
-    attach_quantitative_metrics(summary)
+    report_type = "reviews_enriched_quantitative"
+    report_contract = summary.get("report_contract")
+    if isinstance(report_contract, dict) and report_contract.get("report_type"):
+        report_type = str(report_contract["report_type"])
+    attach_quantitative_metrics(summary, report_type=report_type)
 
     business = summary["business"]
     overview = summary["overview"]
