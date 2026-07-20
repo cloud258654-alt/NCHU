@@ -81,14 +81,19 @@ def test_design_reference_files_are_retained_but_not_runtime_inputs():
     assert (project_root / "docs" / "design" / "Frontend.html").exists()
 
 
+def test_required_agent_handoff_documents_exist():
+    project_root = ROOT.parent
+    assert (project_root / "docs" / "AGENT_HANDOFF.md").exists()
+    assert (project_root / "docs" / "architecture_review.md").exists()
+    assert (project_root / "docs" / "database_execution_runbook.md").exists()
+
+
 def test_removed_stale_project_documents():
     project_root = ROOT.parent
     removed_paths = [
-        "docs/AGENT_HANDOFF.md",
         "docs/PHASE7A_PTT_GLOBAL_CRAWLER_REPORT.md",
         "docs/PHASE_THREADS_CRAWLER_REPAIR_REPORT.md",
         "docs/SEARCH_AGGREGATOR.md",
-        "docs/architecture_review.md",
         "docs/schema_infographic.html",
         "docs/schema_infographic.infographic",
         "docs/schema_infographic.svg",
