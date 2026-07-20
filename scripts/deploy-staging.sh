@@ -124,11 +124,172 @@ fail_if_production_collision() {
     fi
 }
 
-fail_if_port_in_use() {
+is_port_listening() {
     local port="$1"
-    if command -v ss >/dev/null 2>&1 && ss -ltn "( sport = :${port} )" | grep -q ":${port}"; then
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltn "sport = :${port}" 2>/dev/null | grep -qE ":${port}\b" && return 0
+    fi
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -iTCP:"${port}" -sTCP:LISTEN -n -P >/dev/null 2>&1 && return 0
+    fi
+    return 1
+}
+
+get_listener_pids() {
+    local port="$1"
+    local pids=""
+    if command -v ss >/dev/null 2>&1; then
+        pids="$(ss -ltnp "sport = :${port}" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u | tr '\n' ' ')"
+    fi
+    if [[ -z "${pids// /}" ]] && command -v lsof >/dev/null 2>&1; then
+        pids="$(lsof -t -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null | sort -u | tr '\n' ' ')"
+    fi
+    if [[ -z "${pids// /}" ]] && command -v fuser >/dev/null 2>&1; then
+        pids="$(fuser "${port}/tcp" 2>/dev/null | tr '\n' ' ')"
+    fi
+    printf '%s' "${pids}"
+}
+
+verify_staging_backend_port() {
+    local port="${STAGING_BACKEND_PORT}"
+    if ! is_port_listening "${port}"; then
+        return 0
+    fi
+
+    if ! systemctl is-active --quiet "${STAGING_BACKEND_SERVICE}" 2>/dev/null; then
         echo "RESULT: BLOCKED_PRODUCTION_COLLISION"
-        echo "REASON: port ${port} is already listening"
+        echo "REASON: port ${port} is listening but ${STAGING_BACKEND_SERVICE} is not active"
+        exit 1
+    fi
+
+    local service_main_pid
+    service_main_pid="$(systemctl show "${STAGING_BACKEND_SERVICE}" -p MainPID --value 2>/dev/null || true)"
+
+    local pids
+    pids="$(get_listener_pids "${port}")"
+
+    local pid_matched=0
+    if [[ -n "${pids// /}" ]]; then
+        for pid in ${pids}; do
+            if [[ -n "${service_main_pid}" && "${service_main_pid}" != "0" && "${pid}" == "${service_main_pid}" ]]; then
+                pid_matched=1
+                break
+            fi
+            if [[ -f "/proc/${pid}/cgroup" ]] && grep -q "${STAGING_BACKEND_SERVICE}" "/proc/${pid}/cgroup" 2>/dev/null; then
+                pid_matched=1
+                break
+            fi
+            if systemctl status "${pid}" 2>/dev/null | grep -q "${STAGING_BACKEND_SERVICE}"; then
+                pid_matched=1
+                break
+            fi
+        done
+    else
+        if [[ -n "${service_main_pid}" && "${service_main_pid}" != "0" ]]; then
+            pid_matched=1
+        fi
+    fi
+
+    if [[ "${pid_matched}" == "1" ]]; then
+        return 0
+    else
+        echo "RESULT: BLOCKED_PRODUCTION_COLLISION"
+        echo "REASON: port ${port} is listening by a process not belonging to ${STAGING_BACKEND_SERVICE}"
+        exit 1
+    fi
+}
+
+verify_staging_n8n_port() {
+    local port="${STAGING_N8N_HOST_PORT}"
+    if ! is_port_listening "${port}"; then
+        return 0
+    fi
+
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "RESULT: BLOCKED_PRODUCTION_COLLISION"
+        echo "REASON: port ${port} is listening but docker command is unavailable"
+        exit 1
+    fi
+
+    local running_container
+    running_container="$(docker ps --filter "name=^/${STAGING_N8N_CONTAINER}$" --filter "status=running" --format '{{.Names}}' 2>/dev/null || true)"
+
+    if [[ "${running_container}" != "${STAGING_N8N_CONTAINER}" ]]; then
+        echo "RESULT: BLOCKED_PRODUCTION_COLLISION"
+        echo "REASON: port ${port} is listening but container ${STAGING_N8N_CONTAINER} is not running"
+        exit 1
+    fi
+
+    local mapped_ports
+    mapped_ports="$(docker port "${STAGING_N8N_CONTAINER}" 2>/dev/null || true)"
+    if echo "${mapped_ports}" | grep -q ":${port}\b"; then
+        return 0
+    else
+        echo "RESULT: BLOCKED_PRODUCTION_COLLISION"
+        echo "REASON: port ${port} is listening but not mapped by container ${STAGING_N8N_CONTAINER}"
+        exit 1
+    fi
+}
+
+verify_staging_gateway_port() {
+    local port="${STAGING_GATEWAY_PORT}"
+    if ! is_port_listening "${port}"; then
+        return 0
+    fi
+
+    local pids
+    pids="$(get_listener_pids "${port}")"
+    local is_nginx=0
+    if [[ -n "${pids// /}" ]]; then
+        for pid in ${pids}; do
+            local p_name
+            p_name="$(ps -p "${pid}" -o comm= 2>/dev/null || true)"
+            if [[ "${p_name}" == "nginx" ]]; then
+                is_nginx=1
+                break
+            fi
+        done
+    else
+        if systemctl is-active --quiet nginx 2>/dev/null || pgrep -x nginx >/dev/null 2>&1; then
+            is_nginx=1
+        fi
+    fi
+
+    if [[ "${is_nginx}" != "1" ]]; then
+        echo "RESULT: BLOCKED_PRODUCTION_COLLISION"
+        echo "REASON: port ${port} is listening by a non-nginx process"
+        exit 1
+    fi
+
+    local config_matched=0
+    local conf_files=(
+        "/etc/nginx/sites-enabled/bi-rmp-staging-gateway.conf"
+        "/etc/nginx/conf.d/bi-rmp-staging-gateway.conf"
+        "/etc/nginx/sites-enabled/bi-rmp-staging.conf"
+    )
+    local f
+    for f in "${conf_files[@]}"; do
+        if [[ -f "${f}" ]] && grep -qE "listen\s+([0-9.]+:)?${port}\b" "${f}" 2>/dev/null && grep -qE "(bi-rmp-staging|proxy_pass http://127.0.0.1:${STAGING_BACKEND_PORT})" "${f}" 2>/dev/null; then
+            config_matched=1
+            break
+        fi
+    done
+
+    if [[ "${config_matched}" == "0" ]]; then
+        if command -v nginx >/dev/null 2>&1; then
+            local nginx_dump
+            nginx_dump="$(nginx -T 2>/dev/null || true)"
+            if echo "${nginx_dump}" | grep -qE "listen\s+([0-9.]+:)?${port}\b" && echo "${nginx_dump}" | grep -qE "(bi-rmp-staging|proxy_pass http://127.0.0.1:${STAGING_BACKEND_PORT})"; then
+                config_matched=1
+            fi
+        fi
+    fi
+
+    if [[ "${config_matched}" == "1" ]]; then
+        return 0
+    else
+        echo "RESULT: BLOCKED_PRODUCTION_COLLISION"
+        echo "REASON: port ${port} is listening by nginx but no valid bi-rmp-staging gateway config was verified"
         exit 1
     fi
 }
@@ -245,9 +406,9 @@ PY
 cd "${STAGING_APP_DIR}"
 
 fail_if_production_collision
-fail_if_port_in_use "${STAGING_BACKEND_PORT}"
-fail_if_port_in_use "${STAGING_N8N_HOST_PORT}"
-fail_if_port_in_use "${STAGING_GATEWAY_PORT}"
+verify_staging_backend_port
+verify_staging_n8n_port
+verify_staging_gateway_port
 
 git fetch origin --prune
 git cat-file -e "${TARGET_REF}^{commit}"

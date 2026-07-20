@@ -128,7 +128,45 @@ Use a normal HTTPS server block or a trusted tunnel in front of the staging
 gateway. The n8n editor remains reachable only through local host access or an
 SSH tunnel.
 
-## Deployment
+## Staging Deployment Flow
+
+The required deployment sequence for initial installation and repeatable redeployment is:
+
+```text
+bootstrap host
+→ 建立 runtime env
+→ 確認 LINE／LIFF／HTTPS 外部設定
+→ deploy staging
+→ install/reload public gateway
+→ verify staging
+→ real LINE E2E
+```
+
+### 1. Host Bootstrap
+
+On the staging host (executed once for initial setup, or re-run safely as an idempotent step):
+
+```bash
+cd /home/harcker8119/BI-RMP-STAGING
+scripts/bootstrap-staging-host.sh --hostname staging.example.com
+```
+
+The bootstrap script:
+
+- requires explicit Staging hostname
+- creates `/home/harcker8119/BI-RMP-STAGING` and `.venv`
+- copies `.env.staging.example` to `.env.staging.runtime` only if missing
+- installs `bi-rmp-staging.service` to `/etc/systemd/system/bi-rmp-staging.service`
+- runs `systemctl daemon-reload` and enables `bi-rmp-staging.service`
+- does not start the Backend service prior to env configuration
+- installs Staging Nginx gateway config to `/etc/nginx/sites-available/bi-rmp-staging-gateway.conf`
+- validates Nginx config with `nginx -t`
+- does not modify Production server blocks
+- keeps n8n editor bound strictly to `127.0.0.1:5679`
+- does not print or generate secrets
+- is fully idempotent and does not run migrations
+
+### 2. Deployment
 
 On the staging host:
 
@@ -141,10 +179,10 @@ The deploy script:
 
 - uses a staging-only lock file
 - rejects known production path, service, port, compose, and container names
-- validates the target commit
+- validates target commit
 - accepts the Gate C2 branch or an explicit target SHA
-- does not require the target SHA to be on `main`
 - rejects database or Supabase diffs except the C2 rollback rehearsal SQL
+- verifies listener ports (8101 owned by `bi-rmp-staging.service`, 5679 mapped by `bi-rmp-staging-n8n`, 8180 owned by Staging Nginx gateway) to allow repeatable deployments while blocking unknown process collisions
 - creates a file backup before switching code
 - installs Python requirements
 - runs compile and focused tests
