@@ -1,0 +1,21 @@
+[Unit]
+Description=BI-RMP Staging Cloudflare Tunnel
+After=network.target bi-rmp-staging.service
+Wants=bi-rmp-staging.service
+
+[Service]
+Type=simple
+User=harcker8119
+WorkingDirectory=/home/harcker8119/BI-RMP-STAGING
+ExecStart=/usr/local/bin/cloudflared tunnel --config /home/harcker8119/BI-RMP-STAGING/.cloudflared/config.yml run
+Restart=always
+RestartSec=5sec
+
+# Security & Sandboxing
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadOnlyPaths=/home/harcker8119/BI-RMP-STAGING/.cloudflared
+
+[Install]
+WantedBy=multi-user.target

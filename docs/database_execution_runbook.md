@@ -11,7 +11,7 @@ The cutover migration must be deployed with the matching backend change. Stop cr
 
 - Back up Supabase first if runtime data must be kept.
 - The migration does not delete unresolved rows or protected `review%` / `master_reviews_enriched` tables.
-- The current live preflight found `crawl_posts.id = 393` without a verifiable job. The migration rolls back until that row is explicitly resolved, exported/deleted, or the database is clean-rebuilt.
+- Historical cutover note: A previous live preflight found `crawl_posts.id = 393` without a verifiable job. Migration preflight verifies that all orphan rows are resolved, exported/deleted, or cleanly rebuilt before cutover transaction completes.
 - Do not grant context-view access before reviewing Supabase RLS policies.
 
 ## Expected runtime tables

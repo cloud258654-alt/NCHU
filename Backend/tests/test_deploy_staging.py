@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,12 +24,37 @@ def _to_posix(path: Path) -> str:
     return str(path).replace("\\", "/")
 
 
+def _find_bash() -> str | None:
+    git_bash_candidates = [
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files\Git\usr\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+    ]
+    for candidate in git_bash_candidates:
+        if os.path.exists(candidate):
+            return candidate
+
+    bash_path = shutil.which("bash") or shutil.which("sh")
+    if bash_path:
+        try:
+            res = subprocess.run([bash_path, "-c", "echo OK"], capture_output=True, text=True, timeout=5)
+            if res.returncode == 0 and "OK" in res.stdout:
+                return bash_path
+        except Exception:
+            pass
+    return None
+
+
 def _run_bash_snippet(snippet: str, env: dict[str, str] | None = None) -> tuple[int, str, str]:
+    bash_cmd = _find_bash()
+    if not bash_cmd:
+        pytest.skip("Working bash executable is not available on this host environment.")
+
     full_env = dict(os.environ)
     if env:
         full_env.update(env)
     res = subprocess.run(
-        ["bash", "-c", snippet],
+        [bash_cmd, "-c", snippet],
         capture_output=True,
         text=True,
         encoding="utf-8",
