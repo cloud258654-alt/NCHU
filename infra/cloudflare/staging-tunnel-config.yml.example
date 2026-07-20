@@ -1,0 +1,12 @@
+# Cloudflare Tunnel Configuration Template for Staging
+# File: /home/harcker8119/BI-RMP-STAGING/.cloudflared/config.yml
+
+tunnel: <STAGING_TUNNEL_UUID>
+credentials-file: /home/harcker8119/BI-RMP-STAGING/.cloudflared/<STAGING_TUNNEL_UUID>.json
+
+ingress:
+  # Route traffic to Staging Nginx Gateway ONLY
+  - hostname: staging.example.com
+    service: http://127.0.0.1:8180
+  # Default catch-all rule (returns 404)
+  - service: http_status:404
