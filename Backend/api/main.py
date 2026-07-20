@@ -22,6 +22,11 @@ from api.client_recognition import (
 from api.reputation_crawl import ReputationCrawlJobService, ReputationCrawlResult
 from api.line_flex import build_reputation_flex_message, build_registration_flex_message
 from api.line_registration_notification import LineRegistrationNotificationService
+from api.staging_allowlist import (
+    PUBLIC_STAGING_BLOCKED_MESSAGE,
+    StagingLineUserNotAllowedError,
+    enforce_staging_line_user_allowed,
+)
 from api.liff_registration import (
     LiffAuthenticationError,
     LiffBusinessRegisterRequest,
@@ -147,6 +152,16 @@ def verify_internal_api_key(
         )
 
 
+def verify_staging_line_user(line_user_id: str | None) -> None:
+    try:
+        enforce_staging_line_user_allowed(line_user_id)
+    except StagingLineUserNotAllowedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=PUBLIC_STAGING_BLOCKED_MESSAGE,
+        ) from exc
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -208,6 +223,7 @@ async def liff_register_business(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(exc),
         ) from exc
+    verify_staging_line_user(identity.line_user_id)
 
     try:
         registration = await asyncio.to_thread(
@@ -246,6 +262,7 @@ async def liff_register_business(
 async def line_client_recognition(
     payload: ClientRecognitionRequest,
 ) -> dict[str, object]:
+    verify_staging_line_user(payload.line_user_id)
     try:
         result = await asyncio.to_thread(
             get_client_recognition_repository().recognize,
@@ -296,6 +313,7 @@ async def check_business_duplicate(
 async def create_line_reputation_crawler_job(
     payload: ReputationCrawlRequest,
 ) -> dict[str, object]:
+    verify_staging_line_user(payload.line_user_id)
     try:
         return await get_reputation_crawl_job_service().create_job(
             business_name=payload.business_name,
@@ -328,6 +346,7 @@ async def get_line_reputation_crawler_job_status(
     task_id: int,
     payload: ReputationCrawlJobStatusRequest,
 ) -> dict[str, object]:
+    verify_staging_line_user(payload.line_user_id)
     try:
         return await get_reputation_crawl_job_service().status(
             str(task_id),
@@ -344,6 +363,7 @@ async def get_line_reputation_crawler_job_status(
 async def get_latest_line_reputation_crawler_job_status(
     payload: ReputationCrawlJobStatusRequest,
 ) -> dict[str, object]:
+    verify_staging_line_user(payload.line_user_id)
     try:
         return await get_reputation_crawl_job_service().latest_status(
             line_user_id=payload.line_user_id,
@@ -357,6 +377,7 @@ async def get_latest_line_reputation_crawler_job_status(
     dependencies=[Depends(verify_internal_api_key)],
 )
 async def line_reputation_summary(payload: ReputationSummaryRequest) -> dict:
+    verify_staging_line_user(payload.line_user_id)
     requested_business_name = (
         payload.business_name or extract_business_name(payload.message_text)
     )
@@ -466,6 +487,7 @@ def _line_reputation_no_business_response(
     dependencies=[Depends(verify_internal_api_key)],
 )
 async def log_line_message(payload: MessageLogRequest) -> dict[str, object]:
+    verify_staging_line_user(payload.line_user_id)
     repo = ClientMessagesLogRepository()
     try:
         return await asyncio.to_thread(

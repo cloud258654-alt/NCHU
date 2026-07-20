@@ -1,0 +1,34 @@
+name: ${COMPOSE_PROJECT_NAME:-bi-rmp-staging-n8n}
+
+services:
+  postgres:
+    container_name: ${STAGING_N8N_POSTGRES_CONTAINER:-bi-rmp-staging-n8n-postgres}
+    environment:
+      POSTGRES_DB: ${N8N_DB_NAME:-n8n_staging}
+      POSTGRES_USER: ${N8N_DB_USER:-n8n_staging}
+      POSTGRES_PASSWORD: ${N8N_DB_PASSWORD}
+    volumes:
+      - staging_n8n_postgres_data:/var/lib/postgresql/data
+
+  n8n:
+    container_name: ${STAGING_N8N_CONTAINER:-bi-rmp-staging-n8n}
+    ports:
+      - "127.0.0.1:${N8N_HOST_PORT:-5679}:5678"
+    environment:
+      DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME:-n8n_staging}
+      DB_POSTGRESDB_USER: ${N8N_DB_USER:-n8n_staging}
+      DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD}
+      N8N_HOST: ${N8N_HOST}
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-https}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL}
+      N8N_PROXY_HOPS: ${N8N_PROXY_HOPS:-1}
+      N8N_SECURE_COOKIE: ${N8N_SECURE_COOKIE:-true}
+      APP_ENV: ${APP_ENV:-staging}
+      BI_RMP_LINE_ALLOWED_USER_IDS: ${BI_RMP_LINE_ALLOWED_USER_IDS:-}
+    volumes:
+      - staging_n8n_data:/home/node/.n8n
+      - ./workflows:/opt/bi-rmp/n8n-workflows:ro
+
+volumes:
+  staging_n8n_data:
+  staging_n8n_postgres_data:

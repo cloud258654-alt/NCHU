@@ -340,7 +340,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ \n  (() => {\n    const body = typeof $json.body === 'string' ? JSON.parse($json.body) : ($json.body || {});\n    const event = (body.events || [])[0] || {};\n    const postbackData = event.type === 'postback' ? (event.postback?.data || '') : '';\n    const messageText = event.type === 'message' && event.message?.type === 'text' ? (event.message.text || '') : postbackData;\n    return JSON.stringify({\n      line_user_id: event.source?.userId || '',\n      message_text: messageText || null,\n      direction: 'incoming'\n    });\n  })()\n}}",
+        "body": "={{ \n  (() => {\n    const body = typeof $json.body === 'string' ? JSON.parse($json.body) : ($json.body || {});\n    const event = (body.events || [])[0] || {};\n    const postbackData = event.type === 'postback' ? (event.postback?.data || '') : '';\n    const messageText = event.type === 'message' && event.message?.type === 'text' ? (event.message.text || '') : postbackData;\n    return JSON.stringify({\n      line_user_id: $json.lineUserId || event.source?.userId || '',\n      message_text: $json.messageText || messageText || null,\n      direction: 'incoming'\n    });\n  })()\n}}",
         "options": { "timeout": 10000 }
       },
       "id": "log-chat-message",
@@ -349,16 +349,53 @@
       "typeVersion": 4.2,
       "position": [-1080, -150],
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "conditions": [{
+            "id": "staging-line-user-allowed",
+            "leftValue": "={{ (() => { const appEnv = String($env.APP_ENV || '').trim().toLowerCase(); const raw = String($env.BI_RMP_LINE_ALLOWED_USER_IDS || '').trim(); if (appEnv !== 'staging' || !raw) return true; const allowed = raw.split(',').map(value => value.trim()).filter(Boolean); return allowed.includes($json.lineUserId); })() }}",
+            "rightValue": true,
+            "operator": { "type": "boolean", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "staging-allowlist-check",
+      "name": "Check Staging LINE Allowlist",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-840, -180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $('Verify LINE Signature and Parse Intent').item.json;\nconst message = { type: 'text', text: '此測試環境僅開放已授權的測試帳號使用。' };\nreturn [{ json: { replyToken: event.replyToken, messages: [message] } }];"
+      },
+      "id": "prepare-staging-restricted",
+      "name": "Format Staging Restricted Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-580, -320]
     }
   ],
   "connections": {
     "LINE Webhook": { "main": [
       [
-        { "node": "Log Incoming Message", "type": "main", "index": 0 },
         { "node": "Verify LINE Signature and Parse Intent", "type": "main", "index": 0 }
       ]
     ] },
-    "Verify LINE Signature and Parse Intent": { "main": [[{ "node": "Identify Client and Business", "type": "main", "index": 0 }]] },
+    "Verify LINE Signature and Parse Intent": { "main": [[{ "node": "Check Staging LINE Allowlist", "type": "main", "index": 0 }]] },
+    "Check Staging LINE Allowlist": { "main": [
+      [
+        { "node": "Log Incoming Message", "type": "main", "index": 0 },
+        { "node": "Identify Client and Business", "type": "main", "index": 0 }
+      ],
+      [{ "node": "Format Staging Restricted Response", "type": "main", "index": 0 }]
+    ] },
+    "Format Staging Restricted Response": { "main": [[{ "node": "Send General Message Response", "type": "main", "index": 0 }]] },
     "Identify Client and Business": { "main": [[{ "node": "Check if Business Registered", "type": "main", "index": 0 }]] },
     "Check if Business Registered": { "main": [
       [{ "node": "Check if Status Query", "type": "main", "index": 0 }],

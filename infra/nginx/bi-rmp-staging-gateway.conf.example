@@ -1,0 +1,71 @@
+server_tokens off;
+
+map $http_upgrade $staging_connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+server {
+    listen 8180;
+    server_name staging-host.example;
+
+    client_max_body_size 2m;
+    access_log /var/log/nginx/bi-rmp-staging-access.log;
+    error_log /var/log/nginx/bi-rmp-staging-error.log warn;
+
+    location = /health {
+        limit_except GET { deny all; }
+        proxy_pass http://127.0.0.1:8101;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 15s;
+    }
+
+    location = /register {
+        limit_except GET { deny all; }
+        proxy_pass http://127.0.0.1:8101;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+    }
+
+    location = /api/liff/config {
+        limit_except GET { deny all; }
+        proxy_pass http://127.0.0.1:8101;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+    }
+
+    location = /api/liff/business/register {
+        limit_except POST { deny all; }
+        proxy_pass http://127.0.0.1:8101;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+    }
+
+    location = /webhook/line/events {
+        limit_except POST { deny all; }
+        proxy_pass http://127.0.0.1:5679/webhook/line/events;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $staging_connection_upgrade;
+        proxy_read_timeout 1250s;
+    }
+
+    location / {
+        return 404;
+    }
+}

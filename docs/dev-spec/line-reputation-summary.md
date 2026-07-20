@@ -19,6 +19,13 @@ The endpoint no longer reads `public.reviews_enriched`,
 `public.master_reviews_enriched`, or any all-row enriched review relation for
 customer reports.
 
+Shared staging can additionally restrict LINE users through
+`BI_RMP_LINE_ALLOWED_USER_IDS`. When `APP_ENV=staging` and the allowlist is
+non-empty, blocked users receive a fixed public staging message before customer
+recognition, task creation, status lookup, or summary generation. The response
+does not include the requested LINE user ID, allowlist entries, SQL,
+connection strings, Supabase refs, tokens, stack traces, or local paths.
+
 ## Flow
 
 ```text

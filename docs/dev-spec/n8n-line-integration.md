@@ -173,6 +173,35 @@ find exactly one workflow matching the repository workflow name or webhook path.
 
 Real secrets must stay in `.env`, n8n credentials, or a deployment secret manager. Do not commit real secret values.
 
+## Shared Staging Isolation
+
+Customer Validation Gate C2 uses a separate staging deployment contract from
+production:
+
+```text
+APP_ENV=staging
+SUPABASE_PROJECT_REF=qlhykeeyjaoikczoambe
+ALLOW_DATABASE_WRITES=true
+ALLOW_PRODUCTION_DB=false
+BI_RMP_LINE_ALLOWED_USER_IDS=<comma-separated test LINE user IDs>
+```
+
+When `APP_ENV=staging` and `BI_RMP_LINE_ALLOWED_USER_IDS` is non-empty, the n8n
+workflow checks the parsed LINE user ID immediately after signature
+verification. Blocked users receive a fixed staging restriction Reply API
+message and do not proceed to message logging, client recognition, business
+registration, task creation, crawler execution, status lookup, or report
+generation.
+
+The backend repeats the same allowlist check on LINE and LIFF endpoints as the
+final enforcement layer. Empty staging allowlist keeps the existing behavior;
+non-staging environments ignore the allowlist.
+
+Staging n8n uses `infra/n8n/docker-compose.staging.yml` as an override. It must
+use a separate compose project, container names, PostgreSQL volume, n8n volume,
+workflow ID, webhook URL, credentials, and execution history. The n8n editor is
+bound only to localhost and must not be exposed directly to the Internet.
+
 ## Registration URL
 
 LIFF is the preferred registration flow. Set the LIFF Endpoint URL in LINE

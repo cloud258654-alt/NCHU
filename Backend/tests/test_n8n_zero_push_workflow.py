@@ -48,6 +48,46 @@ def test_status_endpoint_supports_explicit_and_latest_task_lookup():
     assert "/jobs/status/latest" in url
 
 
+def test_staging_allowlist_blocks_before_backend_or_message_logging():
+    workflow = _workflow()
+    connections = workflow["connections"]
+    nodes = {node["name"]: node for node in workflow["nodes"]}
+
+    allowlist_code = json.dumps(nodes["Check Staging LINE Allowlist"], ensure_ascii=False)
+    blocked_code = nodes["Format Staging Restricted Response"]["parameters"]["jsCode"]
+
+    assert "BI_RMP_LINE_ALLOWED_USER_IDS" in allowlist_code
+    assert "APP_ENV" in allowlist_code
+    assert "configured test users" not in blocked_code
+    assert "此測試環境僅開放已授權的測試帳號使用。" in blocked_code
+
+    assert connections["LINE Webhook"]["main"][0] == [
+        {
+            "node": "Verify LINE Signature and Parse Intent",
+            "type": "main",
+            "index": 0,
+        }
+    ]
+    assert connections["Verify LINE Signature and Parse Intent"]["main"][0][0]["node"] == (
+        "Check Staging LINE Allowlist"
+    )
+
+    allowed_targets = {
+        item["node"]
+        for item in connections["Check Staging LINE Allowlist"]["main"][0]
+    }
+    blocked_targets = {
+        item["node"]
+        for item in connections["Check Staging LINE Allowlist"]["main"][1]
+    }
+
+    assert allowed_targets == {"Log Incoming Message", "Identify Client and Business"}
+    assert blocked_targets == {"Format Staging Restricted Response"}
+    assert connections["Format Staging Restricted Response"]["main"][0][0]["node"] == (
+        "Send General Message Response"
+    )
+
+
 def test_status_formatter_does_not_expose_raw_backend_errors(tmp_path):
     forbidden = [
         "DATABASE_URL",
