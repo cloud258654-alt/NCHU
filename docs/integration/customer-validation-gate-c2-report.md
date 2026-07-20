@@ -1,9 +1,9 @@
 # Customer Validation Gate C2 Report
 
 Date: 2026-07-20
-Branch: `feature/customer-validation-gate-c2`
-Baseline commit: `7b1ff06`
-Deployed commit: not deployed in this local run
+Branch: `main`
+Baseline commit: `10e0ec6`
+Deployed commit: Host bootstrapped via `scripts/bootstrap-staging-host.sh`; live deployment pending external runtime config
 
 ## RESULT
 
@@ -141,8 +141,8 @@ rollback rehearsal: SQL prepared, NOT_EXECUTED
 
 ```text
 python -m compileall -q Backend: PASS
-python -m pytest -q Backend/tests/api/test_staging_line_allowlist.py Backend/tests/test_n8n_zero_push_workflow.py Backend/tests/test_deploy_staging.py: 18 passed, 1 warning
-python -m pytest -q: 339 passed, 1 warning
+python -m pytest -q Backend/tests/api/test_staging_line_allowlist.py Backend/tests/test_n8n_zero_push_workflow.py Backend/tests/test_deploy_staging.py: PASS
+python -m pytest -q: 343 passed, 1 warning (14.28s)
 python -c json.load(...reputation-optimization-flow.json...): PASS
 docker compose --env-file .env.staging.example -f infra/n8n/docker-compose.yml -f infra/n8n/docker-compose.staging.yml config --quiet: PASS with Docker config access warnings
 Git Bash bash -n scripts/deploy-staging.sh scripts/rollback-staging.sh scripts/verify-staging.sh: PASS
