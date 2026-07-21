@@ -5,6 +5,12 @@ Branch: `main`
 Baseline commit: `10e0ec6`
 Deployed commit: Host bootstrapped via `scripts/bootstrap-staging-host.sh`; live deployment pending external runtime config
 
+## 005A profile transition
+
+LINE/LIFF work is deferred by user. The follow-up core profile deploys only
+backend, Supabase, staging n8n, gateway prerequisites, and isolation checks;
+it must not require LINE credentials or publish the LINE workflow.
+
 ## RESULT
 
 ```text

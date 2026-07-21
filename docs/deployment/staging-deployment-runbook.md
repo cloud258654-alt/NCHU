@@ -1,6 +1,14 @@
 # Shared Staging Deployment Runbook
 
-Status: Prepared / waiting for external configuration
+Status: Core profile prepared locally / waiting for staging runtime configuration
+
+## Core profile (005A)
+
+Use `STAGING_DEPLOY_PROFILE=core` to deploy backend, Supabase, staging n8n and
+gateway prerequisites without LINE/LIFF credentials or workflow publication.
+Core uses only local n8n callback settings (`N8N_HOST=localhost` and
+`N8N_WEBHOOK_URL=http://127.0.0.1:5679/`) and reports LINE/LIFF/public HTTPS
+as deferred. Use `full` only after the external LINE configuration is complete.
 
 ## Scope
 
@@ -61,19 +69,32 @@ ALLOW_DATABASE_WRITES=true
 ALLOW_PRODUCTION_DB=false
 ```
 
-Required secret or external configuration keys are checked by name only:
+Core profile requires the following keys; the scripts check only their presence
+and never print their values:
+
+```text
+DATABASE_URL
+BI_RMP_INTERNAL_API_KEY
+N8N_ENCRYPTION_KEY
+N8N_DB_PASSWORD
+```
+
+The core profile also requires these local n8n settings:
+
+```text
+N8N_HOST=localhost
+N8N_WEBHOOK_URL=http://127.0.0.1:5679/
+```
+
+The following are full-profile-only and must not block a core deployment:
 
 ```text
 LINE_CHANNEL_ACCESS_TOKEN
 LINE_CHANNEL_SECRET
 LINE_LIFF_ID
 LINE_LOGIN_CHANNEL_ID
-N8N_WEBHOOK_URL
-N8N_ENCRYPTION_KEY
-N8N_DB_PASSWORD
-BI_RMP_INTERNAL_API_KEY
-DATABASE_URL
 BI_RMP_LINE_ALLOWED_USER_IDS
+N8N_WORKFLOW_ID
 ```
 
 The scripts must print only `PRESENT`, `MISSING`, or `INVALID_FORMAT` for these
@@ -172,7 +193,7 @@ On the staging host:
 
 ```bash
 cd /home/harcker8119/BI-RMP-STAGING
-scripts/deploy-staging.sh <target-sha>
+STAGING_DEPLOY_PROFILE=core scripts/deploy-staging.sh <target-sha>
 ```
 
 The deploy script:
@@ -180,7 +201,7 @@ The deploy script:
 - uses a staging-only lock file
 - rejects known production path, service, port, compose, and container names
 - validates target commit
-- accepts the Gate C2 branch or an explicit target SHA
+- accepts the core-profile branch or an explicit target SHA when deploying core
 - rejects database or Supabase diffs except the C2 rollback rehearsal SQL
 - verifies listener ports (8101 owned by `bi-rmp-staging.service`, 5679 mapped by `bi-rmp-staging-n8n`, 8180 owned by Staging Nginx gateway) to allow repeatable deployments while blocking unknown process collisions
 - creates a file backup before switching code
@@ -188,23 +209,24 @@ The deploy script:
 - runs compile and focused tests
 - restarts only `bi-rmp-staging.service`
 - starts only the staging n8n compose project
-- imports the workflow with a fixed `N8N_WORKFLOW_ID`
+- in core mode, defers LINE/LIFF workflow import and public HTTPS checks
+- in full mode, imports the workflow with a fixed `N8N_WORKFLOW_ID`
 - does not run migrations
 
 ## Verification
 
 ```bash
-scripts/verify-staging.sh
+STAGING_DEPLOY_PROFILE=core scripts/verify-staging.sh
 ```
 
-The verification script checks service state, local health, LIFF page/config,
-n8n readiness, configured container names, and public HTTPS routes when
-`STAGING_PUBLIC_BASE_URL` is set.
+The core verification checks backend, gateway, Supabase, n8n, and n8n
+PostgreSQL readiness; it expects `/api/liff/config` to return HTTP 503 and
+reports LINE/LIFF, customer E2E, and public HTTPS as deferred.
 
 ## Rollback
 
 ```bash
-scripts/rollback-staging.sh <previous-sha>
+STAGING_DEPLOY_PROFILE=core scripts/rollback-staging.sh <previous-sha>
 ```
 
 If `<previous-sha>` is omitted, the script uses the latest recorded staging

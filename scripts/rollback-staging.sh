@@ -11,7 +11,17 @@ STAGING_COMPOSE_PROJECT_NAME="${STAGING_COMPOSE_PROJECT_NAME:-bi-rmp-staging-n8n
 STAGING_N8N_CONTAINER="${STAGING_N8N_CONTAINER:-bi-rmp-staging-n8n}"
 STAGING_N8N_POSTGRES_CONTAINER="${STAGING_N8N_POSTGRES_CONTAINER:-bi-rmp-staging-n8n-postgres}"
 STAGING_LOCK_FILE="${STAGING_LOCK_FILE:-/tmp/bi-rmp-staging-deploy.lock}"
+STAGING_DEPLOY_PROFILE="${STAGING_DEPLOY_PROFILE:-full}"
 ROLLBACK_SHA="${1:-}"
+
+case "${STAGING_DEPLOY_PROFILE}" in
+    core|full) ;;
+    *)
+        echo "RESULT: FAIL"
+        echo "REASON: unsupported staging deploy profile"
+        exit 1
+        ;;
+esac
 
 exec 9>"${STAGING_LOCK_FILE}"
 if ! flock -n 9; then
@@ -75,4 +85,5 @@ docker_compose_staging up -d n8n
 wait_for_url "N8N_READINESS" "http://127.0.0.1:${STAGING_N8N_HOST_PORT}/healthz/readiness" 30
 
 echo "RESULT: ROLLBACK_STAGING_COMPLETED"
+echo "STAGING_DEPLOY_PROFILE=${STAGING_DEPLOY_PROFILE}"
 echo "ROLLBACK_SHA=${ROLLBACK_SHA}"

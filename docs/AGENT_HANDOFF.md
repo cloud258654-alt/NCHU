@@ -2,7 +2,7 @@
 
 Last Updated: 2026-07-20
 Baseline Commit: `10e0ec6`
-Current Gate: `Customer Validation Gate C2 — Host Bootstrapped / Waiting External Configuration`
+Current Gate: `Customer Validation Gate C2 — Core shared staging profile ready for deployment; LINE/LIFF deferred by user`
 
 ---
 
@@ -24,6 +24,7 @@ Current Gate: `Customer Validation Gate C2 — Host Bootstrapped / Waiting Exter
 | **Staging Topology & Guards** | `COMPLETED` | Ports `8101`, `5679`, `8180` and isolation guards verified. |
 | **Host Bootstrap Script** | `COMPLETED` | `scripts/bootstrap-staging-host.sh` created and idempotent. |
 | **Shared Staging Deployment** | `PENDING` | Awaiting runtime configuration file `/home/harcker8119/BI-RMP-STAGING/.env.staging.runtime`. |
+| **005A Core Shared Staging** | `READY_FOR_CORE_STAGING_DEPLOYMENT` | Core profile separates backend/Supabase/n8n readiness from deferred LINE/LIFF configuration. |
 | **Public HTTPS Domain / Tunnel** | `BLOCKED` | Awaiting external domain configuration for Webhook / LIFF endpoints. |
 | **LINE Developers Staging Channel**| `BLOCKED` | Awaiting Messaging API Access Token, Secret, and LIFF App ID. |
 | **Supabase Staging Database Target** | `PREPARED` | Project Ref: `qlhykeeyjaoikczoambe` (BI-RMP-V2-STAGING). |

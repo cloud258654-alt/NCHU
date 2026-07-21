@@ -14,12 +14,16 @@ STAGING_N8N_POSTGRES_CONTAINER="${STAGING_N8N_POSTGRES_CONTAINER:-bi-rmp-staging
 STAGING_LOCK_FILE="${STAGING_LOCK_FILE:-/tmp/bi-rmp-staging-deploy.lock}"
 STAGING_BACKUP_ROOT="${STAGING_BACKUP_ROOT:-/home/harcker8119/backups}"
 STAGING_PUBLIC_BASE_URL="${STAGING_PUBLIC_BASE_URL:-}"
+STAGING_DEPLOY_PROFILE="${STAGING_DEPLOY_PROFILE:-full}"
 TARGET_REF="${1:-HEAD}"
 PREVIOUS_SHA=""
 BACKUP_DIR=""
 TEMP_N8N_WORKFLOW_IMPORT=""
+TARGET_BRANCH=""
+PRODUCTION_BACKEND_STATE_BEFORE=""
+PRODUCTION_N8N_STATE_BEFORE=""
 
-required_env_keys=(
+core_required_env_keys=(
     APP_ENV
     SUPABASE_PROJECT_REF
     SUPABASE_URL
@@ -28,16 +32,32 @@ required_env_keys=(
     ALLOW_PRODUCTION_DB
     BI_RMP_INTERNAL_API_KEY
     BI_RMP_BACKEND_BASE_URL
+    N8N_HOST
+    N8N_WEBHOOK_URL
+    N8N_ENCRYPTION_KEY
+    N8N_DB_PASSWORD
+    COMPOSE_PROJECT_NAME
+)
+
+full_line_env_keys=(
     BI_RMP_LINE_ALLOWED_USER_IDS
     LINE_CHANNEL_ACCESS_TOKEN
     LINE_CHANNEL_SECRET
     LINE_LIFF_ID
     LINE_LOGIN_CHANNEL_ID
-    N8N_WEBHOOK_URL
-    N8N_ENCRYPTION_KEY
-    N8N_DB_PASSWORD
     N8N_WORKFLOW_ID
 )
+
+required_env_keys=()
+
+case "${STAGING_DEPLOY_PROFILE}" in
+    core|full) ;;
+    *)
+        echo "RESULT: FAIL"
+        echo "REASON: unsupported staging deploy profile"
+        exit 1
+        ;;
+esac
 
 cleanup() {
     if [[ -n "${TEMP_N8N_WORKFLOW_IMPORT}" ]]; then
@@ -70,6 +90,24 @@ read_env_value() {
     value="${value%\'}"
     value="${value#\'}"
     printf '%s' "${value}"
+}
+
+validate_deploy_profile() {
+    case "${STAGING_DEPLOY_PROFILE}" in
+        core|full) ;;
+        *)
+            echo "RESULT: FAIL"
+            echo "REASON: unsupported staging deploy profile"
+            exit 1
+            ;;
+    esac
+}
+
+configure_required_env_keys() {
+    required_env_keys=("${core_required_env_keys[@]}")
+    if [[ "${STAGING_DEPLOY_PROFILE}" == "full" ]]; then
+        required_env_keys+=("${full_line_env_keys[@]}")
+    fi
 }
 
 env_key_status() {
@@ -326,6 +364,16 @@ validate_environment_contract() {
         echo "INVALID_FORMAT=ALLOW_PRODUCTION_DB"
         exit 1
     fi
+    if [[ "${STAGING_DEPLOY_PROFILE}" == "core" && "$(read_env_value N8N_HOST)" != "localhost" ]]; then
+        echo "RESULT: WAITING_EXTERNAL_CONFIGURATION"
+        echo "INVALID_FORMAT=N8N_HOST"
+        exit 1
+    fi
+    if [[ "${STAGING_DEPLOY_PROFILE}" == "core" && "$(read_env_value N8N_WEBHOOK_URL)" != "http://127.0.0.1:${STAGING_N8N_HOST_PORT}/" ]]; then
+        echo "RESULT: WAITING_EXTERNAL_CONFIGURATION"
+        echo "INVALID_FORMAT=N8N_WEBHOOK_URL"
+        exit 1
+    fi
     if [[ "${missing}" == "1" ]]; then
         echo "RESULT: WAITING_EXTERNAL_CONFIGURATION"
         echo "REASON: required staging secrets or public settings are missing"
@@ -389,10 +437,7 @@ data["active"] = True
 output.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 
-    docker_compose_staging config --quiet
-    docker_compose_staging up -d postgres
-    docker_compose_staging up -d n8n
-    wait_for_url "N8N_READINESS" "http://127.0.0.1:${STAGING_N8N_HOST_PORT}/healthz/readiness" 30
+    deploy_n8n_core
 
     n8n_cli import:workflow \
         --input="${import_container_path}"
@@ -403,9 +448,48 @@ PY
     wait_for_url "N8N_READINESS_AFTER_IMPORT" "http://127.0.0.1:${STAGING_N8N_HOST_PORT}/healthz/readiness" 30
 }
 
+snapshot_production_state() {
+    PRODUCTION_BACKEND_STATE_BEFORE="$(systemctl is-active bi-rmp.service 2>/dev/null || echo inactive-or-missing)"
+    PRODUCTION_N8N_STATE_BEFORE="$(docker inspect --format '{{.State.Running}}' bi-rmp-n8n 2>/dev/null || echo missing)"
+}
+
+verify_production_unchanged() {
+    local backend_state_after
+    local n8n_state_after
+    backend_state_after="$(systemctl is-active bi-rmp.service 2>/dev/null || echo inactive-or-missing)"
+    n8n_state_after="$(docker inspect --format '{{.State.Running}}' bi-rmp-n8n 2>/dev/null || echo missing)"
+
+    if [[ "${PRODUCTION_BACKEND_STATE_BEFORE}" != "${backend_state_after}" || "${PRODUCTION_N8N_STATE_BEFORE}" != "${n8n_state_after}" ]]; then
+        echo "RESULT: FAIL"
+        echo "REASON: production service state changed during staging deployment"
+        exit 1
+    fi
+
+    echo "PRODUCTION_BACKEND_UNCHANGED=YES"
+    echo "PRODUCTION_N8N_UNCHANGED=YES"
+}
+
+deploy_n8n_core() {
+    docker_compose_staging config --quiet
+    docker_compose_staging up -d postgres
+    docker_compose_staging up -d n8n
+    wait_for_url "N8N_READINESS" "http://127.0.0.1:${STAGING_N8N_HOST_PORT}/healthz/readiness" 30
+}
+
+run_focused_tests() {
+    if [[ "${STAGING_DEPLOY_PROFILE}" == "core" ]]; then
+        "${STAGING_APP_DIR}/.venv/bin/python" -m pytest -q Backend/tests/test_deploy_staging.py Backend/tests/test_staging_core_profile.py
+    else
+        "${STAGING_APP_DIR}/.venv/bin/python" -m pytest -q Backend/tests/api/test_staging_line_allowlist.py Backend/tests/test_n8n_zero_push_workflow.py
+    fi
+}
+
 cd "${STAGING_APP_DIR}"
 
+validate_deploy_profile
+configure_required_env_keys
 fail_if_production_collision
+snapshot_production_state
 verify_staging_backend_port
 verify_staging_n8n_port
 verify_staging_gateway_port
@@ -416,9 +500,15 @@ TARGET_SHA="$(git rev-parse "${TARGET_REF}^{commit}")"
 PREVIOUS_SHA="$(git rev-parse HEAD)"
 CURRENT_BRANCH="$(git branch --show-current || true)"
 
-if [[ "${CURRENT_BRANCH}" != "feature/customer-validation-gate-c2" && ! "${TARGET_REF}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+if [[ "${STAGING_DEPLOY_PROFILE}" == "core" ]]; then
+    TARGET_BRANCH="feature/core-shared-staging-profile"
+else
+    TARGET_BRANCH="feature/customer-validation-gate-c2"
+fi
+
+if [[ "${CURRENT_BRANCH}" != "${TARGET_BRANCH}" && ! "${TARGET_REF}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
     echo "RESULT: FAIL"
-    echo "REASON: deploy accepts the Gate C2 branch or an explicit target SHA"
+    echo "REASON: deploy accepts the selected profile branch or an explicit target SHA"
     exit 1
 fi
 
@@ -437,35 +527,45 @@ fi
 validate_environment_contract
 create_backup
 
-if git show-ref --verify --quiet refs/heads/feature/customer-validation-gate-c2; then
-    git switch feature/customer-validation-gate-c2
+if git show-ref --verify --quiet "refs/heads/${TARGET_BRANCH}"; then
+    git switch "${TARGET_BRANCH}"
 else
-    git switch -c feature/customer-validation-gate-c2
+    git switch -c "${TARGET_BRANCH}"
 fi
 git reset --hard "${TARGET_SHA}"
 
 "${STAGING_APP_DIR}/.venv/bin/python" -m pip install --disable-pip-version-check -r requirements.txt
 "${STAGING_APP_DIR}/.venv/bin/python" -m compileall -q Backend
-"${STAGING_APP_DIR}/.venv/bin/python" -m pytest -q Backend/tests/api/test_staging_line_allowlist.py Backend/tests/test_n8n_zero_push_workflow.py
+run_focused_tests
 
 sudo systemctl daemon-reload
 sudo systemctl restart "${STAGING_BACKEND_SERVICE}"
 sudo systemctl is-active --quiet "${STAGING_BACKEND_SERVICE}"
 wait_for_url "BACKEND_HEALTH" "http://127.0.0.1:${STAGING_BACKEND_PORT}/health" 20
-wait_for_url "LIFF_PAGE" "http://127.0.0.1:${STAGING_BACKEND_PORT}/register" 5
-wait_for_url "LIFF_CONFIG" "http://127.0.0.1:${STAGING_BACKEND_PORT}/api/liff/config" 5
-
-deploy_n8n_workflow
-
-if [[ -n "${STAGING_PUBLIC_BASE_URL}" ]]; then
-    wait_for_url "PUBLIC_HEALTH" "${STAGING_PUBLIC_BASE_URL%/}/health" 10
-    wait_for_url "PUBLIC_REGISTER" "${STAGING_PUBLIC_BASE_URL%/}/register" 10
-    wait_for_url "PUBLIC_LIFF_CONFIG" "${STAGING_PUBLIC_BASE_URL%/}/api/liff/config" 10
+if [[ "${STAGING_DEPLOY_PROFILE}" == "core" ]]; then
+    deploy_n8n_core
+    wait_for_url "GATEWAY_HEALTH" "http://127.0.0.1:${STAGING_GATEWAY_PORT}/health" 20
+    echo "LINE_INTEGRATION=DEFERRED"
+    echo "LIFF_INTEGRATION=DEFERRED"
+    echo "PUBLIC_HTTPS=DEFERRED"
+    verify_production_unchanged
+    echo "RESULT: DEPLOYED_STAGING_CORE"
 else
-    echo "PUBLIC_HTTPS=WAITING_EXTERNAL_CONFIGURATION"
+    wait_for_url "LIFF_PAGE" "http://127.0.0.1:${STAGING_BACKEND_PORT}/register" 5
+    wait_for_url "LIFF_CONFIG" "http://127.0.0.1:${STAGING_BACKEND_PORT}/api/liff/config" 5
+    deploy_n8n_workflow
+    if [[ -n "${STAGING_PUBLIC_BASE_URL}" ]]; then
+        wait_for_url "PUBLIC_HEALTH" "${STAGING_PUBLIC_BASE_URL%/}/health" 10
+        wait_for_url "PUBLIC_REGISTER" "${STAGING_PUBLIC_BASE_URL%/}/register" 10
+        wait_for_url "PUBLIC_LIFF_CONFIG" "${STAGING_PUBLIC_BASE_URL%/}/api/liff/config" 10
+    else
+        echo "PUBLIC_HTTPS=WAITING_EXTERNAL_CONFIGURATION"
+    fi
+    verify_production_unchanged
+    echo "RESULT: DEPLOYED_STAGING_PENDING_E2E"
 fi
 
-echo "RESULT: DEPLOYED_STAGING_PENDING_E2E"
+echo "STAGING_DEPLOY_PROFILE=${STAGING_DEPLOY_PROFILE}"
 echo "TARGET_SHA=${TARGET_SHA}"
 echo "PREVIOUS_SHA=${PREVIOUS_SHA}"
 echo "ROLLBACK_COMMAND=scripts/rollback-staging.sh"
