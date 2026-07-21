@@ -14,6 +14,15 @@ backup/redeploy/rollback, and production-isolation guards.
 It does not require or enable LINE/LIFF configuration, LINE workflow import,
 LINE webhook routing, LIFF registration, or customer E2E.
 
+## Dedicated host topology
+
+`STAGING_HOST_MODE=shared` remains the default for the historical shared-host
+workflow. `STAGING_HOST_MODE=dedicated` supports a Staging-only VM with a
+configurable user, home directory, application directory, and backup root.
+Dedicated mode must find no Production directory, service, containers, or
+ports. Core bootstrap does not require a public hostname and binds the gateway
+only to `127.0.0.1:8180`.
+
 ## Core environment contract
 
 Core requires the database, backend, and n8n keys only. It must use:

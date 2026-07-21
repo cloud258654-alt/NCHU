@@ -1,4 +1,4 @@
-# Shared Staging Deployment Runbook
+# Staging Deployment Runbook
 
 Status: Core profile prepared locally / waiting for staging runtime configuration
 
@@ -10,6 +10,15 @@ Core uses only local n8n callback settings (`N8N_HOST=localhost` and
 `N8N_WEBHOOK_URL=http://127.0.0.1:5679/`) and reports LINE/LIFF/public HTTPS
 as deferred. Use `full` only after the external LINE configuration is complete.
 
+## Dedicated host mode
+
+Use `STAGING_HOST_MODE=dedicated` only on a Staging-only VM. The scripts derive
+the default app and backup locations from the active user, but callers can set
+`STAGING_USER`, `STAGING_HOME`, `STAGING_APP_DIR`, and `STAGING_BACKUP_ROOT`
+explicitly. Dedicated mode blocks any detected Production directory, service,
+containers, or ports. It binds the core gateway to `127.0.0.1:8180` and does
+not require a public hostname.
+
 ## Scope
 
 This runbook covers the isolated Customer Validation Gate C2 staging topology.
@@ -18,8 +27,8 @@ It must not be used for production deployment.
 ## Staging Topology
 
 ```text
-app directory: /home/harcker8119/BI-RMP-STAGING
-environment file: /home/harcker8119/BI-RMP-STAGING/.env.staging.runtime
+app directory: ${STAGING_HOME}/BI-RMP-STAGING
+environment file: ${STAGING_HOME}/BI-RMP-STAGING/.env.staging.runtime
 systemd service: bi-rmp-staging.service
 backend listen: 127.0.0.1:8101
 n8n host port: 127.0.0.1:5679
@@ -168,14 +177,15 @@ bootstrap host
 On the staging host (executed once for initial setup, or re-run safely as an idempotent step):
 
 ```bash
-cd /home/harcker8119/BI-RMP-STAGING
-scripts/bootstrap-staging-host.sh --hostname staging.example.com
+cd "${HOME}/BI-RMP-STAGING"
+STAGING_DEPLOY_PROFILE=core STAGING_HOST_MODE=dedicated \
+  scripts/bootstrap-staging-host.sh
 ```
 
 The bootstrap script:
 
-- requires explicit Staging hostname
-- creates `/home/harcker8119/BI-RMP-STAGING` and `.venv`
+- requires an explicit Staging hostname only for the `full` profile
+- derives the core dedicated-host directory from the active user's home and creates `.venv`
 - copies `.env.staging.example` to `.env.staging.runtime` only if missing
 - installs `bi-rmp-staging.service` to `/etc/systemd/system/bi-rmp-staging.service`
 - runs `systemctl daemon-reload` and enables `bi-rmp-staging.service`
@@ -192,8 +202,9 @@ The bootstrap script:
 On the staging host:
 
 ```bash
-cd /home/harcker8119/BI-RMP-STAGING
-STAGING_DEPLOY_PROFILE=core scripts/deploy-staging.sh <target-sha>
+cd "${HOME}/BI-RMP-STAGING"
+STAGING_DEPLOY_PROFILE=core STAGING_HOST_MODE=dedicated \
+  scripts/deploy-staging.sh <target-sha>
 ```
 
 The deploy script:
@@ -216,7 +227,7 @@ The deploy script:
 ## Verification
 
 ```bash
-STAGING_DEPLOY_PROFILE=core scripts/verify-staging.sh
+STAGING_DEPLOY_PROFILE=core STAGING_HOST_MODE=dedicated scripts/verify-staging.sh
 ```
 
 The core verification checks backend, gateway, Supabase, n8n, and n8n
@@ -226,7 +237,7 @@ reports LINE/LIFF, customer E2E, and public HTTPS as deferred.
 ## Rollback
 
 ```bash
-STAGING_DEPLOY_PROFILE=core scripts/rollback-staging.sh <previous-sha>
+STAGING_DEPLOY_PROFILE=core STAGING_HOST_MODE=dedicated scripts/rollback-staging.sh <previous-sha>
 ```
 
 If `<previous-sha>` is omitted, the script uses the latest recorded staging

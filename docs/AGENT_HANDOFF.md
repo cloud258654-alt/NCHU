@@ -2,7 +2,7 @@
 
 Last Updated: 2026-07-20
 Baseline Commit: `10e0ec6`
-Current Gate: `Customer Validation Gate C2 — Core shared staging profile ready for deployment; LINE/LIFF deferred by user`
+Current Gate: `Customer Validation Gate C2 — Dedicated Core Staging host adaptation in progress; LINE/LIFF deferred by user`
 
 ---
 
@@ -23,8 +23,8 @@ Current Gate: `Customer Validation Gate C2 — Core shared staging profile ready
 | **Local Code & Tests** | `COMPLETED` | All 343 unit and integration tests passing. |
 | **Staging Topology & Guards** | `COMPLETED` | Ports `8101`, `5679`, `8180` and isolation guards verified. |
 | **Host Bootstrap Script** | `COMPLETED` | `scripts/bootstrap-staging-host.sh` created and idempotent. |
-| **Shared Staging Deployment** | `PENDING` | Awaiting runtime configuration file `/home/harcker8119/BI-RMP-STAGING/.env.staging.runtime`. |
-| **005A Core Shared Staging** | `READY_FOR_CORE_STAGING_DEPLOYMENT` | Core profile separates backend/Supabase/n8n readiness from deferred LINE/LIFF configuration. |
+| **Dedicated Staging Deployment** | `PENDING` | Awaiting a runtime configuration file in the dedicated host user's staging directory. |
+| **005A Core Shared Staging** | `DEDICATED_HOST_ADAPTATION_IN_PROGRESS` | Core profile is being adapted from the shared-host assumption to a dedicated Staging-only VM. |
 | **Public HTTPS Domain / Tunnel** | `BLOCKED` | Awaiting external domain configuration for Webhook / LIFF endpoints. |
 | **LINE Developers Staging Channel**| `BLOCKED` | Awaiting Messaging API Access Token, Secret, and LIFF App ID. |
 | **Supabase Staging Database Target** | `PREPARED` | Project Ref: `qlhykeeyjaoikczoambe` (BI-RMP-V2-STAGING). |
@@ -34,8 +34,8 @@ Current Gate: `Customer Validation Gate C2 — Core shared staging profile ready
 ## 3. Staging Topology & Isolation Rules
 
 ```text
-Staging App Directory:    /home/harcker8119/BI-RMP-STAGING
-Staging Runtime Env:      /home/harcker8119/BI-RMP-STAGING/.env.staging.runtime
+Staging App Directory:    ${STAGING_HOME}/BI-RMP-STAGING
+Staging Runtime Env:      ${STAGING_HOME}/BI-RMP-STAGING/.env.staging.runtime
 Staging Systemd Service:  bi-rmp-staging.service
 Staging Backend Port:     8101
 Staging n8n Host Port:    5679
@@ -57,7 +57,7 @@ Production Containers:    bi-rmp-n8n, bi-rmp-n8n-postgres
 
 ## 4. Exact Next Actions
 
-1. Provide real runtime credentials in `/home/harcker8119/BI-RMP-STAGING/.env.staging.runtime` on the Staging host (do not commit runtime secrets to Git).
+1. Provide real runtime credentials in the dedicated Staging host's `.env.staging.runtime` (do not commit runtime secrets to Git).
 2. Configure LINE Developers Console for the Staging Messaging API Channel & LIFF app.
 3. Bind Public HTTPS hostname / reverse proxy to Staging Gateway port `8180`.
 4. Execute `scripts/deploy-staging.sh <target-sha>` on the Staging host and run `scripts/verify-staging.sh`.

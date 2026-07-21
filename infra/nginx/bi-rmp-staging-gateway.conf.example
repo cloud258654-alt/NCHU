@@ -6,8 +6,8 @@ map $http_upgrade $staging_connection_upgrade {
 }
 
 server {
-    listen 8180;
-    server_name staging-host.example;
+    __STAGING_GATEWAY_LISTEN__
+    server_name __STAGING_SERVER_NAME__;
 
     client_max_body_size 2m;
     access_log /var/log/nginx/bi-rmp-staging-access.log;

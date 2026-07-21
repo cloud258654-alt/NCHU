@@ -2,8 +2,13 @@
 
 set -Eeuo pipefail
 
-STAGING_APP_DIR="${STAGING_APP_DIR:-/home/harcker8119/BI-RMP-STAGING}"
+STAGING_HOST_MODE="${STAGING_HOST_MODE:-shared}"
+STAGING_USER="${STAGING_USER:-$(id -un)}"
+STAGING_HOME="${STAGING_HOME:-$(getent passwd "${STAGING_USER}" 2>/dev/null | cut -d: -f6 || true)}"
+STAGING_HOME="${STAGING_HOME:-${HOME:-}}"
+STAGING_APP_DIR="${STAGING_APP_DIR:-${STAGING_HOME}/BI-RMP-STAGING}"
 STAGING_ENV_FILE="${STAGING_ENV_FILE:-${STAGING_APP_DIR}/.env.staging.runtime}"
+STAGING_BACKUP_ROOT="${STAGING_BACKUP_ROOT:-${STAGING_HOME}/backups}"
 STAGING_BACKEND_SERVICE="${STAGING_BACKEND_SERVICE:-bi-rmp-staging.service}"
 STAGING_BACKEND_PORT="${STAGING_BACKEND_PORT:-8101}"
 STAGING_N8N_HOST_PORT="${STAGING_N8N_HOST_PORT:-5679}"
@@ -103,6 +108,17 @@ validate_deploy_profile() {
     esac
 }
 
+validate_host_mode() {
+    case "${STAGING_HOST_MODE}" in
+        shared|dedicated) ;;
+        *)
+            echo "RESULT: FAIL"
+            echo "REASON: unsupported staging host mode"
+            exit 1
+            ;;
+    esac
+}
+
 configure_required_env_keys() {
     required_env_keys=("${core_required_env_keys[@]}")
     if [[ "${STAGING_DEPLOY_PROFILE}" == "full" ]]; then
@@ -152,6 +168,16 @@ verify_gateway_config() {
     fi
 }
 
+verify_dedicated_gateway_binding() {
+    [[ "${STAGING_HOST_MODE}" == "dedicated" ]] || return 0
+    if ss -ltn "sport = :${STAGING_GATEWAY_PORT}" 2>/dev/null | grep -qE "127\\.0\\.0\\.1:${STAGING_GATEWAY_PORT}\\b"; then
+        echo "DEDICATED_GATEWAY_BIND=PASS"
+    else
+        echo "DEDICATED_GATEWAY_BIND=FAIL"
+        return 1
+    fi
+}
+
 require_running_container() {
     local label="$1"
     local container="$2"
@@ -176,7 +202,30 @@ require_healthy_postgres_container() {
     fi
 }
 
+dedicated_port_in_use() {
+    local port="$1"
+    command -v ss >/dev/null 2>&1 && ss -ltn "sport = :${port}" 2>/dev/null | grep -qE ":${port}\b"
+}
+
+verify_dedicated_production_resources() {
+    if [[ -d "/home/harcker8119/BI-RMP" ]] \
+        || systemctl cat bi-rmp.service >/dev/null 2>&1 \
+        || { command -v docker >/dev/null 2>&1 && docker inspect bi-rmp-n8n >/dev/null 2>&1; } \
+        || { command -v docker >/dev/null 2>&1 && docker inspect bi-rmp-n8n-postgres >/dev/null 2>&1; } \
+        || dedicated_port_in_use 8001 \
+        || dedicated_port_in_use 5678 \
+        || dedicated_port_in_use 8080; then
+        echo "RESULT: BLOCKED_UNEXPECTED_PRODUCTION_RESOURCES"
+        exit 1
+    fi
+    echo "PRODUCTION_RESOURCES=ABSENT_AS_EXPECTED"
+}
+
 verify_production_isolation() {
+    if [[ "${STAGING_HOST_MODE}" == "dedicated" ]]; then
+        verify_dedicated_production_resources
+        return 0
+    fi
     local production_backend_state
     local production_n8n_state
     production_backend_state="$(systemctl is-active bi-rmp.service 2>/dev/null || echo inactive-or-missing)"
@@ -186,10 +235,10 @@ verify_production_isolation() {
     echo "PRODUCTION_N8N_UNCHANGED=REQUIRES_DEPLOYMENT_BASELINE"
 }
 
-cd "${STAGING_APP_DIR}"
-
 validate_deploy_profile
+validate_host_mode
 configure_required_env_keys
+cd "${STAGING_APP_DIR}"
 
 echo "BRANCH=$(git branch --show-current)"
 echo "HEAD=$(git rev-parse HEAD)"
@@ -233,6 +282,7 @@ verify_supabase_connection
 check_url "N8N_READINESS" "http://127.0.0.1:${STAGING_N8N_HOST_PORT}/healthz/readiness"
 verify_gateway_config
 check_url "GATEWAY_HEALTH" "http://127.0.0.1:${STAGING_GATEWAY_PORT}/health"
+verify_dedicated_gateway_binding
 
 require_running_container "N8N_CONTAINER" "${STAGING_N8N_CONTAINER}"
 require_running_container "N8N_POSTGRES_CONTAINER" "${STAGING_N8N_POSTGRES_CONTAINER}"
@@ -254,4 +304,5 @@ else
 fi
 
 echo "STAGING_DEPLOY_PROFILE=${STAGING_DEPLOY_PROFILE}"
+echo "HOST_MODE=${STAGING_HOST_MODE}"
 echo "RESULT: VERIFY_STAGING_COMPLETED"

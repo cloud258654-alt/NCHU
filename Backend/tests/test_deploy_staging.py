@@ -69,7 +69,9 @@ def test_staging_deploy_uses_independent_topology_and_blocks_production_names() 
     source = _read("scripts/deploy-staging.sh")
 
     assert "set -Eeuo pipefail" in source
-    assert 'STAGING_APP_DIR="${STAGING_APP_DIR:-/home/harcker8119/BI-RMP-STAGING}"' in source
+    assert 'STAGING_HOST_MODE="${STAGING_HOST_MODE:-shared}"' in source
+    assert 'STAGING_USER="${STAGING_USER:-$(id -un)}"' in source
+    assert 'STAGING_APP_DIR="${STAGING_APP_DIR:-${STAGING_HOME}/BI-RMP-STAGING}"' in source
     assert 'STAGING_BACKEND_SERVICE="${STAGING_BACKEND_SERVICE:-bi-rmp-staging.service}"' in source
     assert 'STAGING_BACKEND_PORT="${STAGING_BACKEND_PORT:-8101}"' in source
     assert 'STAGING_N8N_HOST_PORT="${STAGING_N8N_HOST_PORT:-5679}"' in source
@@ -86,6 +88,7 @@ def test_staging_deploy_uses_independent_topology_and_blocks_production_names() 
     assert "deploy-production.sh" not in source
     assert "ALLOW_PRODUCTION_DB" in source
     assert "qlhykeeyjaoikczoambe" in source
+    assert "BLOCKED_UNEXPECTED_PRODUCTION_RESOURCES" in source
 
 
 def test_staging_deploy_rejects_schema_changes_except_c2_rehearsal_sql() -> None:

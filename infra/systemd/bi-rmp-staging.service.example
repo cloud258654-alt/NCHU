@@ -5,13 +5,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/harcker8119/BI-RMP-STAGING
-EnvironmentFile=/home/harcker8119/BI-RMP-STAGING/.env.staging.runtime
-ExecStart=/home/harcker8119/BI-RMP-STAGING/.venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8101 --app-dir Backend
+WorkingDirectory=__STAGING_APP_DIR__
+EnvironmentFile=__STAGING_ENV_FILE__
+ExecStart=__STAGING_APP_DIR__/.venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8101 --app-dir Backend
 Restart=on-failure
 RestartSec=5
-User=harcker8119
-Group=harcker8119
+User=__STAGING_USER__
+Group=__STAGING_GROUP__
 NoNewPrivileges=true
 PrivateTmp=true
 

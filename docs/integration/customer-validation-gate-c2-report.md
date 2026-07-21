@@ -11,6 +11,13 @@ LINE/LIFF work is deferred by user. The follow-up core profile deploys only
 backend, Supabase, staging n8n, gateway prerequisites, and isolation checks;
 it must not require LINE credentials or publish the LINE workflow.
 
+## Dedicated host transition
+
+The deployment topology is changing from a shared-host assumption to a
+Staging-only VM. Dedicated mode uses a configurable user and home directory,
+requires Production resources to be absent, and keeps the core gateway bound
+to loopback without a public hostname.
+
 ## RESULT
 
 ```text
