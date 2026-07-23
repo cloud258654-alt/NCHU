@@ -119,7 +119,11 @@ async def run_platform(platform: str, args) -> dict:
         )
         if platform != "search" and not getattr(args, "dry_run", False) and not getattr(args, "skip_ai", False):
             if "ai_items_enqueued" not in result or int(result.get("ai_items_enqueued") or 0) > 0:
-                await enqueue_post_crawl_analysis(platform=platform, keyword=search_query)
+                await enqueue_post_crawl_analysis(
+                    platform=platform,
+                    keyword=search_query,
+                    crawl_job_id=job_id,
+                )
     else:
         error_message = result.get("error_message") or "Unknown error"
         await asyncio.to_thread(job_repo.mark_failed, job_id, error_message)

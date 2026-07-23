@@ -104,7 +104,8 @@ class DashboardRepository:
                             ar.risk_level,
                             ar.analyzed_at
                         FROM analysis_results ar
-                        ORDER BY ar.target_type, ar.target_id, ar.analyzed_at DESC, ar.id DESC
+                        WHERE ar.analysis_status = 'completed'
+                        ORDER BY ar.target_type, ar.target_id, ar.analyzed_at DESC, ar.created_at DESC, ar.id DESC
                     ),
                     joined AS (
                         SELECT
@@ -192,7 +193,8 @@ class DashboardRepository:
                             ar.analyzed_at
                         FROM analysis_results ar
                         WHERE ar.target_type = 'crawl_post'
-                        ORDER BY ar.target_id, ar.analyzed_at DESC, ar.id DESC
+                          AND ar.analysis_status = 'completed'
+                        ORDER BY ar.target_id, ar.analyzed_at DESC, ar.created_at DESC, ar.id DESC
                     )
                     SELECT
                         cp.id,
@@ -261,7 +263,8 @@ class DashboardRepository:
                             ar.analyzed_at
                         FROM analysis_results ar
                         WHERE ar.target_type = 'crawl_post'
-                        ORDER BY ar.target_id, ar.analyzed_at DESC, ar.id DESC
+                          AND ar.analysis_status = 'completed'
+                        ORDER BY ar.target_id, ar.analyzed_at DESC, ar.created_at DESC, ar.id DESC
                     )
                     SELECT
                         cp.id,

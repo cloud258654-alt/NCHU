@@ -6,6 +6,60 @@
 
 此模組在 Gate C2 通過後執行。
 
+## 本機實作與驗證狀態（2026-07-23）
+
+```text
+RESULT: LOCAL_VERIFICATION_PASS
+MODULE: 009-ai-analysis-pipeline
+BRANCH: feature/009-ai-analysis-pipeline
+
+STATIC_CHECKS:
+- git diff --check: PASS
+- python compileall: PASS
+
+TEST_RESULTS:
+- focused tests: 36 passed
+- lease/fencing and latest-valid direct tests: 53 passed
+- staging bootstrap focused rerun: 1 passed
+- full regression: 357 passed, 1 warning
+
+WINDOWS_TEST_ENVIRONMENT:
+- Git Bash executable: C:\Program Files\Git\bin\bash.exe
+- cygpath dependency: C:\Program Files\Git\usr\bin
+- 原失敗是 PATH／路徑轉換問題，不是 009 功能錯誤。
+
+DATABASE_STATUS:
+- migration 20260722_analysis_queue_pipeline.sql 已套用至 BI-RMP-V2-STAGING
+- migration 20260723_analysis_queue_lease_fencing.sql: CREATED_NOT_APPLIED
+- 本次工作未重新連線或驗證資料庫
+- Production unchanged
+- business data write 未在本次執行
+
+RUNTIME_STATUS:
+- rules baseline local tests: PASS
+- lease heartbeat and claim-token fencing local tests: PASS
+- stale attempt-3 recovery SQL contract test: PASS
+- latest completed-only Dashboard read-path tests: PASS
+- analysis queue live runtime: NOT_VERIFIED
+- worker live execution: NOT_VERIFIED
+- task-scoped staging readback: NOT_VERIFIED
+- LLM analysis: NOT_VERIFIED
+- LINE／LIFF／n8n: NOT_EXECUTED
+- 006～008: BLOCKED
+- Gate C2: NOT_PASS
+
+ROLLBACK_STATUS:
+- migration rollback rehearsal: NOT_EXECUTED
+- 不得自行執行 rollback
+
+NEXT_ACTION:
+- 先審核本分支 diff
+- 後續另行核准 Live Staging worker／queue 驗證
+- 未完成 Live Staging、LLM 與 rollback 前，不得將 009 標示為最終 PASS
+```
+
+補充風險：Staging advisor 先前提示 `analysis_results` 已啟用 RLS 但未定義 policy；未在缺乏明確存取模型下新增政策。
+
 
 ## 共通執行規則
 

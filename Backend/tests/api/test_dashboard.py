@@ -357,6 +357,8 @@ def test_repository_list_reviews_uses_parameterized_filters_and_pagination() -> 
     sql, params = cursor.execute.call_args[0]
     assert "st.business_id = %s" in sql
     assert "lower(cj.platform) = lower(%s)" in sql
+    assert "ar.analysis_status = 'completed'" in sql
+    assert "ar.analyzed_at DESC, ar.created_at DESC, ar.id DESC" in sql
     assert params == (1, "ptt", 4, 8)
     connection.commit.assert_not_called()
 
@@ -370,5 +372,15 @@ def test_repository_get_review_uses_parameterized_id() -> None:
     assert result == {"id": 101, "title": "Review", "updated_at": None}
     sql, params = cursor.execute.call_args[0]
     assert "WHERE cp.id = %s" in sql
+    assert "ar.analysis_status = 'completed'" in sql
+    assert "ar.analyzed_at DESC, ar.created_at DESC, ar.id DESC" in sql
     assert params == (101,)
     connection.commit.assert_not_called()
+
+
+def test_dashboard_summary_uses_only_latest_completed_analysis():
+    source = DashboardRepository.get_summary.__code__.co_consts
+    sql = "\n".join(value for value in source if isinstance(value, str))
+
+    assert "WHERE ar.analysis_status = 'completed'" in sql
+    assert "ar.analyzed_at DESC, ar.created_at DESC, ar.id DESC" in sql

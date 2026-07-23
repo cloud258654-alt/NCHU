@@ -220,8 +220,19 @@ CREATE TABLE analysis_results (
   recommendation TEXT,
   model_name VARCHAR,
   model_version VARCHAR,
+  idempotency_key VARCHAR,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMPTZ,
+  claimed_at TIMESTAMPTZ,
+  last_error TEXT,
+  worker_id VARCHAR,
+  claim_token VARCHAR,
+  locked_at TIMESTAMPTZ,
+  heartbeat_at TIMESTAMPTZ,
+  lease_expires_at TIMESTAMPTZ,
   analyzed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_analysis_target_type CHECK (target_type IN ('crawl_post', 'crawl_comment')),
   CONSTRAINT chk_analysis_sentiment CHECK (
     sentiment IS NULL OR sentiment IN ('positive', 'negative', 'neutral')
@@ -287,6 +298,15 @@ CREATE INDEX idx_comment_metric_snapshots_comment_id ON comment_metric_snapshots
 CREATE INDEX idx_analysis_results_target ON analysis_results(target_type, target_id);
 CREATE INDEX idx_analysis_results_status_method ON analysis_results(analysis_status, analysis_method);
 CREATE INDEX idx_analysis_results_risk ON analysis_results(risk_level, analyzed_at DESC);
+CREATE UNIQUE INDEX idx_analysis_results_idempotency_key
+  ON analysis_results(idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+CREATE INDEX idx_analysis_results_queue
+  ON analysis_results(analysis_status, next_attempt_at, created_at)
+  WHERE idempotency_key IS NOT NULL;
+CREATE INDEX idx_analysis_results_lease
+  ON analysis_results(lease_expires_at)
+  WHERE idempotency_key IS NOT NULL AND analysis_status = 'processing';
 CREATE INDEX idx_reputation_score_snapshots_business ON reputation_score_snapshots(business_id, calculated_at DESC);
 CREATE INDEX idx_reputation_score_snapshots_platform ON reputation_score_snapshots(platform, score_scope, calculated_at DESC);
 CREATE INDEX idx_alerts_business_id ON alerts(business_id);
